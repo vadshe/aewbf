@@ -1,0 +1,12 @@
+=== ITlib ===
+### desc ###
+Image transform library for Bayer, RGB and YUV formats
+### prerequisites ###
+libpng
+### build ###
+autoreconf
+./configure
+make
+### usage ###
+cd examples/
+./itlib -h
