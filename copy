@@ -1,0 +1,4 @@
+scp ~/aewbf_sig/src/ae_sig.c ~/aewbf_sig/src/af_sig.c ~/aewbf_sig/src/awb_sig.c vadim@192.168.2.4:~/sigticam/sigticam/platform/ti_dm368/appro/av_capture/framework/alg/src/aewbf_sig/
+scp ~/aewbf_sig/include/*.h  vadim@192.168.2.4:~/sigticam/sigticam/platform/ti_dm368/appro/av_capture/framework/alg/src/aewbf_sig/include/
+scp ~/aewbf_sig/src/alg_aewb.c ~/aewbf_sig/src/alg_aewb_control.c  vadim@192.168.2.4:~/sigticam/sigticam/platform/ti_dm368/appro/av_capture/framework/alg/src/
+
