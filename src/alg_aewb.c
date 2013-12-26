@@ -18,14 +18,15 @@
 #include "awb_sig.h"
 
 
-
 ALG_AewbObj gALG_aewbObj;
 AEW_EXT_PARAM Aew_ext_parameter;
 extern AWB_OUTPUT_DATA      gOutAWBData;
+extern DRV_IpipeObj gDRV_ipipeObj; //For geting boxcar
 
 #define GIO_AUTO_IRIS	(83)
 
-//#define FD_DEBUG_MSG
+#define FD_DEBUG_MSG
+#define ALG_AEWB_DEBUG
 
 typedef struct {
   Uint32 awbNumWinH;
@@ -492,7 +493,7 @@ int TI_2A_config(int flicker_detection, int saldre)
 
 #ifdef FD_DEBUG_MSG
     OSA_printf("\n\nTI_2A_config: flicker detection = %d\n\n", flicker_detection);
-    OSA_printf("gFlicker = %d\n", gFlicker);
+    //OSA_printf("gFlicker = %d\n", gFlicker);
     OSA_printf("Exposure maximum = %d, HighGain = %d\n", sensorExposureMax, HighGain);
 #endif
 
@@ -771,75 +772,67 @@ int TI_2A_config(int flicker_detection, int saldre)
     return 0;
 }
 
-static void Get_BoxCar_Value(Uint16 *box)
+static int Get_BoxCar_Statistics(void)
 {
-    int status, i, j, numBlocks;
+    int status, i, i1, i2;
     int bufId=-1;
     OSA_BufInfo *pBufInfo;
+    int w = gDRV_ipipeObj.boxcarInfo.width;
+    int h = gDRV_ipipeObj.boxcarInfo.height;
+    int sz = w*h, sz3 = sz*3, sz4 = sz*4;
+    int R, G, B, Y, GR, GB, Grad;
+    Uint16 *box;
+    int hsz = 1<<12, hist[hsz], min[2], max[2];
+    int sum, th = sz/100;
 
-    Uint16 *curLineAddr;
-    Uint8  *curAddr;
-    int accValue[3];
+    //Uint16 *curLineAddr;
+    //Uint8  *curAddr;
+
+    #ifdef FD_DEBUG_MSG
+    //OSA_printf("Get_BoxCar_Value: w=%5d, h=%5d\n", w, h);
+    #endif
 
     status = DRV_ipipeGetBoxcarBuf(&bufId, OSA_TIMEOUT_NONE);
     if(status!=OSA_SOK) {
         OSA_ERROR("DRV_ipipeGetBoxcarBuf()\n");
         return status;
     }
-
-    pBufInfo =   DRV_ipipeGetBoxcarBufInfo(bufId);
-    if(pBufInfo) {
-
-#ifdef DRV_CAPTURE_TEST_SAVE_BOXCAR_DATA
-        if(count>1) {
-            static char filename[80];
-
-            if(count%(30*10)==0) {
-                sprintf(filename, "BOX_%04d_%dx%d.BIN", count, gDRV_testCtrl.captureInfo.ipipeInfo.boxcarInfo.offsetH, gDRV_testCtrl.captureInfo.ipipeInfo.boxcarInfo.height);
-                OSA_fileWriteFile(filename, pBufInfo->virtAddr, pBufInfo->size);
-            }
-        }
-#endif
-
-        if(count%(30*5)==0) {
-            curAddr = pBufInfo->virtAddr;
-
-            accValue[0] = 0;
-            accValue[1] = 0;
-            accValue[2] = 0;
-
-            for(i=0; i<gDRV_testCtrl.captureInfo.ipipeInfo.boxcarInfo.width; i++) {
-
-                curLineAddr = (Uint16*)curAddr;
-
-                for(j=0; j<gDRV_testCtrl.captureInfo.ipipeInfo.boxcarInfo.height; j++) {
-
-                    accValue[0] += (curLineAddr[0] & 0xFFFF);
-                    accValue[1] += (curLineAddr[1] & 0xFFFF);
-                    accValue[2] += (curLineAddr[2] & 0xFFFF);
-
-                    curLineAddr+=4;
-                }
-                curAddr += gDRV_testCtrl.captureInfo.ipipeInfo.boxcarInfo.offsetH;
-            }
-
-            numBlocks = gDRV_testCtrl.captureInfo.ipipeInfo.boxcarInfo.width*gDRV_testCtrl.captureInfo.ipipeInfo.boxcarInfo.height;
-
-            accValue[0] /= numBlocks;
-            accValue[1] /= numBlocks;
-            accValue[2] /= numBlocks;
-
-#ifdef DRV_CAPTURE_TEST_PRINT_BOXCAR_INFO
-            OSA_printf(" Boxcar Avg Color: R=%5d, G=%5d, B=%5d\n", accValue[2], accValue[1], accValue[0]);
-#endif
-        }
-    }
-
+    pBufInfo = DRV_ipipeGetBoxcarBufInfo(bufId);
     DRV_ipipePutBoxcarBuf(bufId);
 
+    if(pBufInfo) {
+
+        box = pBufInfo->virtAddr;
+
+        R = 0; G = 0; B = 0; Y = 0; GR = 0; GB = 0;
+
+        for(i=0; i < sz4; i+=4) {
+            i1 = i+1; i2 = i+2;
+            R += box[i ];
+            G += box[i1];
+            B += box[i2];
+            GR += abs(box[i1] - box[i ]);
+            GB += abs(box[i1] - box[i2]);
+            Y += (306*box[i  ] + 601*box[i+1] + 117*box[i+2])>>10;
+            hist[Y>>2]++;
+        }
+        R = R/sz>>2; G = G/sz>>2; B = B/sz>>2; Y = Y/sz>>2; GR = GR/sz>>2; GB = GB/sz>>2;
+
+        //Find max and min in histogram
+        sum = 0;
+        for(i=0; sum < th; i++); sum += hist[i];
+        min[0] = i; min[1] = sum;
+        sum = 0;
+        for(i=hsz-1; sum < th; i--); sum += hist[i];
+        max[0] = i; max[1] = sum;
+
+        #ifdef FD_DEBUG_MSG
+        OSA_printf("Boxcar Avg Color: sz = %d R = %d G = %d B = %d Y = %d min = %d minv = %d max = %d maxv = %d GR = %d GB = %d\n",
+                   sz, R, G, B, Y, min[0], min[1], max[0], max[1], GR, GB);
+        #endif
+    }
+
     return status;
-
-
 }
 
 static void GETTING_RGB_BLOCK_VALUE(unsigned short * BLOCK_DATA_ADDR,IAEWB_Rgb *rgbData, aewDataEntry *aew_data, int shift)
@@ -1212,6 +1205,9 @@ void TI2AFunc(void *pAddr)
     float FD_brightness_cur;
     float FD_brightness_next;
     int AE_customdata;
+    Uint16 *box;
+
+    Get_BoxCar_Statistics();
 
     GETTING_RGB_BLOCK_VALUE(pAddr, rgbData, aew_data, 2);
 
@@ -1281,7 +1277,7 @@ void TI2AFunc(void *pAddr)
 	    /* calling awb only we AE has converged */
 	    gALG_aewbObj.AWB_InArgs.curWb = gALG_aewbObj.AE_InArgs.curWb;
 	    gALG_aewbObj.AWB_InArgs.curAe = gALG_aewbObj.AE_InArgs.curAe;
-
+        /*
 	    AWB_TI_AWB.process(
 			       (IAWB_Handle)gALG_aewbObj.handle_awb,
 			       &gALG_aewbObj.AWB_InArgs,
@@ -1289,7 +1285,7 @@ void TI2AFunc(void *pAddr)
 			       rgbData,
 			       NULL
 			      );
-
+        */
 	    if (gALG_aewbObj.aewbVendor == ALG_AEWB_ID_SIG)
 	    {
 		// Sigrand AWB algorithm
@@ -1373,7 +1369,7 @@ void TI2A_applySettings(IAEWB_Ae *curAe, IAEWB_Ae *nextAe, int numSmoothSteps, i
   ALG_aewbSetSensorExposure(sensorExposure);
   if (gALG_aewbObj.AGainEnable)
   {
-      ALG_aewbSetSensorGain(sensorGain);
+      //ALG_aewbSetSensorGain(sensorGain);
   }
 }
 
@@ -1508,7 +1504,8 @@ int ALG_aewbRun(void *hndl, ALG_AewbRunPrm *prm, ALG_AewbStatus *status)
         TI2AFunc( (void *)prm->h3aDataVirtAddr );
     }
     else if(prm->aewbVendor == ALG_AEWB_ID_SIG) {
-        SIG2AFunc( (void *)prm->h3aDataVirtAddr );
+        TI2AFunc( (void *)prm->h3aDataVirtAddr );
+        //SIG2AFunc( (void *)prm->h3aDataVirtAddr );
     }
     return 0;
 }

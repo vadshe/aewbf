@@ -4,7 +4,7 @@
 #include <drv_capture.h>
 #include <drv_display.h>
 
-//#define ALG_AEWB_DEBUG
+#define ALG_AEWB_DEBUG
 
 extern IMAGE_TUNE_Ctrl gIMAGE_TUNE_ctrl;
 

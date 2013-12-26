@@ -9,31 +9,27 @@
 #ifndef AWB_SIG_
 #define AWB_SIG_
 
-#define RY    0x4d
-#define GY    0x96
-#define BY    0x1d
-
 typedef struct AWB_SIG_Obj {
     IALG_Obj   alg;            /* MUST be first field of all XDAS algs */
     XDAS_Int32 numRanges;
     //IAE_Range exposureTimeRange[IAE_MAX_RANGES];
-    XDAS_UInt32 exposureTimeStepSize;
+    //XDAS_UInt32 exposureTimeStepSize;
     //IAE_Range apertureLevelRange[IAE_MAX_RANGES];
     //IAE_Range sensorGainRange[IAE_MAX_RANGES];
     //IAE_Range ipipeGainRange[IAE_MAX_RANGES];
     //IAE_Range targetBrightnessRange;
-    XDAS_UInt32 targetBrightness;
-    XDAS_UInt32 thrld;
-    XDAS_UInt32 avgY;
+    //XDAS_UInt32 targetBrightness;
+    //XDAS_UInt32 thrld;
+    //XDAS_UInt32 avgY;
     XDAS_UInt32 numHistory;
     XDAS_UInt32 numSmoothSteps;
-    XDAS_Int32 *historyBrightness;
-    XDAS_UInt32 curBrightness;
-    XDAS_Int32  curExposureTime;
-    XDAS_Int32  curApertureLevel;
+    //XDAS_Int32 *historyBrightness;
+    //XDAS_UInt32 curBrightness;
+    //XDAS_Int32  curExposureTime;
+    //XDAS_Int32  curApertureLevel;
     XDAS_Int32  curSensorGain;
-    XDAS_Int32  curIpipeGain;
-    XDAS_Bool   locked;
+    //XDAS_Int32  curIpipeGain;
+    //XDAS_Bool   locked;
 } AWB_SIG_Obj;
 
 extern Int AWB_SIG_alloc(const IALG_Params *algParams, IALG_Fxns **pf,
@@ -61,8 +57,6 @@ extern "C" {
  *  Our implementation of the IAWB interface
  */
 extern IAWB_Fxns AWB_SIG_AWB;
-
-#define TIAWB_CMD_CALIBRATION     0x3
 
 #ifdef __cplusplus
 }

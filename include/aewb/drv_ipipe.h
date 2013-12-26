@@ -147,6 +147,64 @@ typedef struct {
 
 } DRV_IpipeBscConfig;
 
+typedef struct {
+
+  DRV_IpipeConfig config;
+
+  OSA_MutexHndl lock;
+
+  DRV_IpipeRszInfo         rszInfo[CSL_RSZ_CH_MAX];
+  CSL_IpipeBscConfig       bscInfo;
+  CSL_IpipeHistogramConfig histoInfo;
+
+  DRV_IpipeBoxcarInfo      boxcarInfo;
+  CSL_IpipeBoxcarConfig    boxcarConfig;
+
+  int numBufRsz[CSL_RSZ_CH_MAX];
+  int numBufBsc;
+  int numBufHisto;
+  int numBufBoxcar;
+
+  OSA_BufInfo bufInfoRsz[CSL_RSZ_CH_MAX][CSL_BUF_NUM_MAX];
+  OSA_BufInfo bufInfoBsc[CSL_BUF_NUM_MAX];
+  OSA_BufInfo bufInfoHisto[CSL_BUF_NUM_MAX];
+  OSA_BufInfo bufInfoBoxcar[CSL_BUF_NUM_MAX];
+
+  DRV_ImgsModeConfig imgsModeInfo;
+
+  DRV_ImgsIpipeConfig *pImgsIpipeConfig;
+
+  Uint8 *bscBufBaseVirtAddr;
+  Uint8 *bscBufBasePhysAddr;
+  Uint8 *histoBufBaseVirtAddr;
+  Uint8 *histoBufBasePhysAddr;
+  Uint8 *boxcarBufBaseVirtAddr;
+  Uint8 *boxcarBufBasePhysAddr;
+
+  CSL_IpipeHwSetup        ipipeSetup;
+  CSL_IpipeInFrameConfig  ipipeInFrameConfig;
+  CSL_IpipeClkConfig      ipipeClkConfig;
+
+  CSL_IpipeifClkConfig        ipipeifClk;
+  CSL_IpipeifDpcmConfig       ipipeifDpcmConfig;
+  CSL_IpipeifSdramInConfig    ipipeifDdrInConfig;
+  CSL_IpipeifInSource2Config  ipipeifInSrcConfig;
+  CSL_IpipeifVpifIsifInConfig ipipeifVpifIsifInConfig;
+
+  CSL_RszHwSetup        rszSetup;
+  CSL_RszInConfig       rszInConfig;
+  CSL_RszInFrameConfig  rszInFrameConfig;
+  CSL_RszClkConfig      rszClkConfig;
+  CSL_RszMinMaxConfig   rszMinMaxConfig;
+  CSL_RszOutConfig      rszOutConfig[CSL_RSZ_CH_MAX];
+
+  Uint32* histResultBuf; /* Hist - ANR */
+  Uint8 histStatus;
+  OSA_MutexHndl statusLock;
+
+
+} DRV_IpipeObj;
+
 int DRV_ipipeOpen(DRV_IpipeConfig *config);
 int DRV_ipipeClose(void);
 
