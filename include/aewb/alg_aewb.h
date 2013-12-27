@@ -36,6 +36,8 @@
 #define IMAGE_TUNE_AWB_RGB_SIZE    1024
 #define IMAGE_TUNE_AWB_YUV_SIZE    1024   /* If modified, change the same in imageTunePreview.h */
 
+#define ALG_SENSOR_BITS     4096
+
 typedef struct {
 
   Uint16 algId;
@@ -107,6 +109,18 @@ typedef struct {
   DRV_H3aInfo *pH3aInfo;
 
 } ALG_AfRunPrm;
+
+//Statistics from BoxCar image
+typedef struct {
+    Uint32 R, G, B;         //Avarage of R, G, B color
+    Uint32 Y;               //Avarage of Y
+    Uint32 GR, GB;          //Avarage of G-R and G-B
+    Uint32 min[2];          //min[0] minimum of histogram, min[1] the number of pixels below min[0]
+    Uint32 max[2];          //max[0] maximum of histogram, max[1] the number of pixels more than min[0]
+    Uint32 hsz;             //Size on BoxCar Histogram
+    Uint32 hist[ALG_SENSOR_BITS];     //Histogram of BoxCar image
+    Uint16 *box;            //Pointer to BoxCar image
+} ALG_aewbf_stat;
 
 /* ANR - IT */
 typedef struct {

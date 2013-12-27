@@ -364,18 +364,6 @@ short ALG_aewbSetIpipeWb(AWB_PARAM  *pAwb_Data, int DGainEnable, int lowlight)
 #endif
 	    } else
 	    {
-		/*if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0)
-		{
-		    rgb2rgb_gain = pAwb_Data->hGain_mid + (pAwb_Data->hGain_minmax / 3);
-		} else
-		{
-		    rgb2rgb_gain = pAwb_Data->hGain_mid + pAwb_Data->hGain_minmax;
-		}
-
-		Y_offset = pAwb_Data->hMin/4;
-		if (Y_offset >= 126)
-		    Y_offset = 126;
-		DRV_ipipeSetYoffet(-Y_offset);*/
 
 		rgb2rgb_gain = 0x400;
 
@@ -400,10 +388,10 @@ short ALG_aewbSetIpipeWb(AWB_PARAM  *pAwb_Data, int DGainEnable, int lowlight)
 
     if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9P031_5MP") == 0)
     {
-        if (lowlight)
-            DRV_isifSetDgain(dGain, OSA_min(4095, (dGain * pAwb_Data->rGain) / 1024), OSA_min(4095, (dGain * pAwb_Data->bGain) / 1024), dGain, 0);
-        else
-            DRV_isifSetDgain(dGain, dGain + ((pAwb_Data->rGain % 64) * dGain / 1024), dGain + ((pAwb_Data->bGain % 64) * dGain / 1024), dGain, 0);
+        //if (lowlight)
+            //DRV_isifSetDgain(dGain, OSA_min(4095, (dGain * pAwb_Data->rGain) / 1024), OSA_min(4095, (dGain * pAwb_Data->bGain) / 1024), dGain, 0);
+        //else
+            //DRV_isifSetDgain(dGain, dGain + ((pAwb_Data->rGain % 64) * dGain / 1024), dGain + ((pAwb_Data->bGain % 64) * dGain / 1024), dGain, 0);
     } else if (strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0)
     {
         if (pAwb_Data->rGain > pAwb_Data->bGain)
@@ -419,14 +407,15 @@ short ALG_aewbSetIpipeWb(AWB_PARAM  *pAwb_Data, int DGainEnable, int lowlight)
                 dGain = (4096 * 1024) / pAwb_Data->bGain;
             }
         }
-        DRV_isifSetDgain(dGain, OSA_min(4095, (dGain * pAwb_Data->rGain) / 1024), OSA_min(4095, (dGain * pAwb_Data->bGain) / 1024), dGain, 0);
+        //DRV_isifSetDgain(dGain, OSA_min(4095, (dGain * pAwb_Data->rGain) / 1024), OSA_min(4095, (dGain * pAwb_Data->bGain) / 1024), dGain, 0);
     } else
     {
-        DRV_isifSetDgain(dGain, dGain, dGain, dGain, 0);
+        //DRV_isifSetDgain(dGain, dGain, dGain, dGain, 0);
     }
 
     return 0;
 }
+
 
 short ALG_aewbSetIpipeWb2(AWB_PARAM  *pAwb_Data )
 {

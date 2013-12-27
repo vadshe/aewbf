@@ -17,11 +17,11 @@
 #include "ae_sig.h"
 #include "awb_sig.h"
 
-
 ALG_AewbObj gALG_aewbObj;
+ALG_aewbf_stat ALG_SIG;
 AEW_EXT_PARAM Aew_ext_parameter;
 extern AWB_OUTPUT_DATA      gOutAWBData;
-extern DRV_IpipeObj gDRV_ipipeObj; //For geting boxcar
+extern DRV_IpipeObj gDRV_ipipeObj; //Geting boxcar
 
 #define GIO_AUTO_IRIS	(83)
 
@@ -172,6 +172,268 @@ int ALG_aewbCheckAutoIris(void)
 		OSA_printf("EVM AUTO_IRIS = %d \n",ret);
 		return ret;
 	}
+}
+
+int SIG_2A_config(int flicker_detection, int saldre)
+{
+    IAE_DynamicParams aeDynamicParams;
+    int i, stepSize;
+    int retval;
+    aeDynamicParams.size = sizeof(aeDynamicParams);
+    aeDynamicParams.numRanges = 0;
+
+    i = 0; aewbFrames = 0; stepSize = 1;
+
+    if (gALG_aewbObj.sensorFps == 25)
+    {
+        ALG_aewbSetSensor50_60Hz(1); // 25FPS
+    } else
+    {
+        ALG_aewbSetSensor50_60Hz(0); // 30FPS
+    }
+
+    sensorGain = 1000;
+
+    lowlight = DRV_imgsGetAEPriority();
+
+    extern int gFlicker;
+
+    if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0)	// AR0331 sensor
+    {
+        if(gFlicker == VIDEO_NTSC)			// 60 Hz flicker
+        {
+            if (gALG_aewbObj.sensorFps == 20)
+            {
+                stepSize = 6000; 	// Exposure stepsize
+                if (sensorExposureMax > 33333)
+                    sensorExposureMax = 48000;
+            }
+            else if (gALG_aewbObj.sensorFps == 25)
+                stepSize = 7500; 	// Exposure stepsize
+            else if (gALG_aewbObj.sensorFps == 30)
+                stepSize = 9000; 	// Exposure stepsize
+        } else if(gFlicker == VIDEO_PAL)	// 50 Hz flicker
+        {
+            if (gALG_aewbObj.sensorFps == 20)
+            {
+                stepSize = 7200; 	// Exposure stepsize
+                if (sensorExposureMax > 33333)
+                    sensorExposureMax = 43200;
+            }
+            else if (gALG_aewbObj.sensorFps == 25)
+                stepSize = 9000; 	// Exposure stepsize
+            else if (gALG_aewbObj.sensorFps == 30)
+                stepSize = 10800; 	// Exposure stepsize
+        } else
+        {
+            stepSize = 1;
+        }
+    } else if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9M034_720P") == 0) // MT9M034 sensor
+    {
+        if(gFlicker == VIDEO_NTSC)			// 60 Hz flicker
+        {
+            if (gALG_aewbObj.sensorFps == 25)
+                stepSize = 7084; 	// Exposure stepsize
+            else if (gALG_aewbObj.sensorFps == 30)
+                stepSize = 8500; 	// Exposure stepsize
+        } else if(gFlicker == VIDEO_PAL)	// 50 Hz flicker
+        {
+            if (gALG_aewbObj.sensorFps == 25)
+                stepSize = 8500; 	// Exposure stepsize
+            else if (gALG_aewbObj.sensorFps == 30)
+                stepSize = 10200; 	// Exposure stepsize
+        } else
+        {
+            stepSize = 1;
+        }
+    } else if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9P031_5MP") == 0) // MT9M031 sensor
+    {
+        if(gFlicker == VIDEO_NTSC)			// 60 Hz flicker
+        {
+            stepSize = 8333; 	// Exposure stepsize
+        } else if(gFlicker == VIDEO_PAL)	// 50 Hz flicker
+        {
+            stepSize = 10000; 	// Exposure stepsize
+        } else
+        {
+            stepSize = 1;
+        }
+    } else if (strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0) // IMX136 sensor
+    {
+        if(gFlicker == VIDEO_NTSC)			// 60 Hz flicker
+        {
+            stepSize = 8333; 	// Exposure stepsize
+        } else if(gFlicker == VIDEO_PAL)	// 50 Hz flicker
+        {
+            stepSize = 10000; 	// Exposure stepsize
+        } else
+        {
+            stepSize = 1;
+        }
+    } else if (strcmp(DRV_imgsGetImagerName(), "OMNIVISION_OV271X_1080P") == 0) // OV271X sensor
+    {
+        if(gFlicker == VIDEO_NTSC)			// 60 Hz flicker
+        {
+            if (gALG_aewbObj.sensorFps == 25)
+                DRV_imgsSetFlicker(0x12);
+            else if (gALG_aewbObj.sensorFps == 30)
+                DRV_imgsSetFlicker(0x22);
+        } else if(gFlicker == VIDEO_PAL)	// 50 Hz flicker
+        {
+            if (gALG_aewbObj.sensorFps == 25)
+                DRV_imgsSetFlicker(0x11);
+            else if (gALG_aewbObj.sensorFps == 30)
+                DRV_imgsSetFlicker(0x21);
+        } else
+        {
+            DRV_imgsSetFlicker(0);
+        }
+    } else
+    {
+        stepSize = 1;
+    }
+
+#ifdef FD_DEBUG_MSG
+    OSA_printf("stepSize = %d final\n", stepSize);
+#endif
+
+    aeDynamicParams.numRanges ++;
+
+    if (HISTmode == 8) // ALTM enable
+    {
+        aeDynamicParams.exposureTimeRange[i].min = 0x20*32;
+        aeDynamicParams.exposureTimeRange[i].max = sensorExposureMax;
+    } else
+    {
+        if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0)
+        {
+            aeDynamicParams.exposureTimeRange[i].min = 0x10*32;
+        } else
+        {
+            aeDynamicParams.exposureTimeRange[i].min = stepSize;
+        }
+        aeDynamicParams.exposureTimeRange[i].max = sensorExposureMax;
+    }
+
+    aeDynamicParams.apertureLevelRange[i].min = 0;
+    aeDynamicParams.apertureLevelRange[i].max = 0;
+    aeDynamicParams.sensorGainRange[i].min = 1000;
+    aeDynamicParams.sensorGainRange[i].max = 1000;
+    aeDynamicParams.ipipeGainRange[i].min = 1024;
+    aeDynamicParams.ipipeGainRange[i].max = 1024;
+    i++;
+
+    aeDynamicParams.numRanges ++;
+    aeDynamicParams.exposureTimeRange[i].min = 0;
+    aeDynamicParams.exposureTimeRange[i].max = 0;
+    aeDynamicParams.apertureLevelRange[i].min = 0;
+    aeDynamicParams.apertureLevelRange[i].max = 0;
+    aeDynamicParams.sensorGainRange[i].min = 1000;
+
+    if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0)
+    {
+        if (HighGain)
+            aeDynamicParams.sensorGainRange[i].max = 5001;
+        else if (lowlight)
+            aeDynamicParams.sensorGainRange[i].max = 3001;
+        else
+            aeDynamicParams.sensorGainRange[i].max = 2001;
+    } else if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9P031_5MP") == 0)
+    {
+        extern int gIRCut, gBWMode;
+        if (HighGain)
+            aeDynamicParams.sensorGainRange[i].max = 2000;
+        else if (lowlight && (!gBWMode || gIRCut != 0))
+            aeDynamicParams.sensorGainRange[i].max = 2000;
+        else if (lowlight)
+            aeDynamicParams.sensorGainRange[i].max = 2000;
+        else
+            aeDynamicParams.sensorGainRange[i].max = 2000;
+    } else if (strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0)
+    {
+        if (HighGain)
+            aeDynamicParams.sensorGainRange[i].max = 100000; // logarithmic
+        else if (lowlight)
+            aeDynamicParams.sensorGainRange[i].max = 15800;
+        else
+            aeDynamicParams.sensorGainRange[i].max = 3000;
+    } else
+    {
+        if (HighGain)
+            aeDynamicParams.sensorGainRange[i].max = 2000;
+        else if (lowlight)
+            aeDynamicParams.sensorGainRange[i].max = 2000;
+        else
+            aeDynamicParams.sensorGainRange[i].max = 1500;
+    }
+    aeDynamicParams.ipipeGainRange[i].min = 0;
+    aeDynamicParams.ipipeGainRange[i].max = 0;
+    i++;
+    aeDynamicParams.numRanges ++ ;
+    aeDynamicParams.exposureTimeRange[i].min = 0;
+    aeDynamicParams.exposureTimeRange[i].max = 0;
+    aeDynamicParams.apertureLevelRange[i].min = 0;
+    aeDynamicParams.apertureLevelRange[i].max = 0;
+    aeDynamicParams.sensorGainRange[i].min = 0;
+    aeDynamicParams.sensorGainRange[i].max = 0;
+    aeDynamicParams.ipipeGainRange[i].min = 4;
+
+    if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9P031_5MP") == 0)
+    {
+        if (lowlight)
+            aeDynamicParams.ipipeGainRange[i].max = 4096;
+        else
+            aeDynamicParams.ipipeGainRange[i].max = 6144;
+    }
+    if (strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0)
+    {
+        aeDynamicParams.ipipeGainRange[i].max = 4096;
+    }
+    else
+        aeDynamicParams.ipipeGainRange[i].max = 6144;
+
+    if(gFlicker == VIDEO_NONE) // More sensitive then not use flicker control
+    {
+        aeDynamicParams.targetBrightnessRange.min = 38;
+        aeDynamicParams.targetBrightnessRange.max = 42;
+        aeDynamicParams.targetBrightness = 40;
+        aeDynamicParams.thrld = 4;
+    } else
+    {
+        aeDynamicParams.targetBrightnessRange.min = 33;
+        aeDynamicParams.targetBrightnessRange.max = 47;
+        aeDynamicParams.targetBrightness = 40;
+        aeDynamicParams.thrld = 14;
+    }
+
+    aeDynamicParams.exposureTimeStepSize = stepSize;
+
+    memcpy((void *)&gALG_aewbObj.AE_InArgs.statMat,
+           (void *)&gALG_aewbObj.IAEWB_StatMatdata,
+           sizeof(IAEWB_StatMat) );
+
+    memcpy( (void *)&gALG_aewbObj.AWB_InArgs.statMat,
+            (void *)&gALG_aewbObj.IAEWB_StatMatdata,
+            sizeof(IAEWB_StatMat) );
+
+    retval = AE_SIG_AE.control((IAE_Handle)gALG_aewbObj.handle_ae, IAE_CMD_SET_CONFIG, &aeDynamicParams, NULL);
+    if(retval == -1) {
+        OSA_ERROR("AE_TI_AE.control()\n");
+        return retval;
+    }
+
+    if(flicker_detection == 1) sensorExposure = stepSize;
+    ALG_aewbSetSensorExposure(sensorExposure);
+
+    /* Pass calibration data to TI AWB */
+    retval = IMAGE_TUNE_GetAwbParams(&awb_calc_data);
+    retval = AWB_SIG_AWB.control((IAWB_Handle)gALG_aewbObj.handle_awb, TIAWB_CMD_CALIBRATION, &awb_calc_data, NULL);
+    if(retval == -1) {
+        OSA_ERROR("AWB_SIG_AWB.control()\n");
+        return retval;
+    }
+
+    return 0;
 }
 
 void *ALG_aewbCreate(ALG_AewbCreate *create)
@@ -466,7 +728,7 @@ void *ALG_aewbCreate(ALG_AewbCreate *create)
           gALG_aewbObj.IAEWB_StatMatdata.winCtHorz  = create->pH3aInfo->aewbNumWinH;
           gALG_aewbObj.IAEWB_StatMatdata.pixCtWin   = create->pH3aInfo->aewbNumSamplesPerColorInWin;
 
-          retval = TI_2A_config(1, create->saldre);
+          retval = SIG_2A_config(1, create->saldre);
           if(retval == -1) {
               return NULL;
           }
@@ -499,10 +761,10 @@ int TI_2A_config(int flicker_detection, int saldre)
 
     if (gALG_aewbObj.sensorFps == 25)
     {
-	ALG_aewbSetSensor50_60Hz(1); // 25FPS
+    ALG_aewbSetSensor50_60Hz(1); // 25FPS
     } else
     {
-	ALG_aewbSetSensor50_60Hz(0); // 30FPS
+    ALG_aewbSetSensor50_60Hz(0); // 30FPS
     }
 
     sensorGain = 1000;
@@ -510,24 +772,24 @@ int TI_2A_config(int flicker_detection, int saldre)
     /* set stepSize based on input from Flicker detectiom and PAL/NTSC environment */
     /*if(flicker_detection == 1)
     {
-	if(Aew_ext_parameter.env_50_60Hz == VIDEO_NTSC)
-	    stepSize = 8333;
-	else
-	    stepSize = 10000;
+    if(Aew_ext_parameter.env_50_60Hz == VIDEO_NTSC)
+        stepSize = 8333;
+    else
+        stepSize = 10000;
     }
     else
     {
-	stepSize = 1;
+    stepSize = 1;
 #ifdef FD_DEBUG_MSG
-	OSA_printf("stepSize = 1\n");
+    OSA_printf("stepSize = 1\n");
 #endif
     }
 
     if(gFlicker == VIDEO_NTSC && flicker_detection == 3){
-	stepSize = (8333*gALG_aewbObj.reduceShutter)/100;
+    stepSize = (8333*gALG_aewbObj.reduceShutter)/100;
     }
     else if(gFlicker == VIDEO_PAL && flicker_detection == 2){
-	stepSize = 10000;
+    stepSize = 10000;
     }*/
 
     lowlight = DRV_imgsGetAEPriority();
@@ -536,97 +798,97 @@ int TI_2A_config(int flicker_detection, int saldre)
 
     if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0)	// AR0331 sensor
     {
-	if(gFlicker == VIDEO_NTSC)			// 60 Hz flicker
-	{
-	    if (gALG_aewbObj.sensorFps == 20)
-	    {
-		stepSize = 6000; 	// Exposure stepsize
-		if (sensorExposureMax > 33333)
-		    sensorExposureMax = 48000;
-	    }
-	    else if (gALG_aewbObj.sensorFps == 25)
-		stepSize = 7500; 	// Exposure stepsize
-	    else if (gALG_aewbObj.sensorFps == 30)
-		stepSize = 9000; 	// Exposure stepsize
-	} else if(gFlicker == VIDEO_PAL)	// 50 Hz flicker
-	{
-	    if (gALG_aewbObj.sensorFps == 20)
-	    {
-		stepSize = 7200; 	// Exposure stepsize
-		if (sensorExposureMax > 33333)
-		    sensorExposureMax = 43200;
-	    }
-	    else if (gALG_aewbObj.sensorFps == 25)
-		stepSize = 9000; 	// Exposure stepsize
-	    else if (gALG_aewbObj.sensorFps == 30)
-		stepSize = 10800; 	// Exposure stepsize
-	} else
-	{
-	    stepSize = 1;
-	}
-    } else if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9M034_720P") == 0) // MT9M034 sensor
+    if(gFlicker == VIDEO_NTSC)			// 60 Hz flicker
     {
-	if(gFlicker == VIDEO_NTSC)			// 60 Hz flicker
-	{
-	    if (gALG_aewbObj.sensorFps == 25)
-		stepSize = 7084; 	// Exposure stepsize
-	    else if (gALG_aewbObj.sensorFps == 30)
-		stepSize = 8500; 	// Exposure stepsize
-	} else if(gFlicker == VIDEO_PAL)	// 50 Hz flicker
-	{
-	    if (gALG_aewbObj.sensorFps == 25)
-		stepSize = 8500; 	// Exposure stepsize
-	    else if (gALG_aewbObj.sensorFps == 30)
-		stepSize = 10200; 	// Exposure stepsize
-	} else
-	{
-	    stepSize = 1;
-	}
-    } else if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9P031_5MP") == 0) // MT9M031 sensor
+        if (gALG_aewbObj.sensorFps == 20)
+        {
+        stepSize = 6000; 	// Exposure stepsize
+        if (sensorExposureMax > 33333)
+            sensorExposureMax = 48000;
+        }
+        else if (gALG_aewbObj.sensorFps == 25)
+        stepSize = 7500; 	// Exposure stepsize
+        else if (gALG_aewbObj.sensorFps == 30)
+        stepSize = 9000; 	// Exposure stepsize
+    } else if(gFlicker == VIDEO_PAL)	// 50 Hz flicker
     {
-	if(gFlicker == VIDEO_NTSC)			// 60 Hz flicker
-	{
-		stepSize = 8333; 	// Exposure stepsize
-	} else if(gFlicker == VIDEO_PAL)	// 50 Hz flicker
-	{
-		stepSize = 10000; 	// Exposure stepsize
-	} else
-	{
-	    stepSize = 1;
-	}
-    } else if (strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0) // IMX136 sensor
-    {
-	if(gFlicker == VIDEO_NTSC)			// 60 Hz flicker
-	{
-		stepSize = 8333; 	// Exposure stepsize
-	} else if(gFlicker == VIDEO_PAL)	// 50 Hz flicker
-	{
-		stepSize = 10000; 	// Exposure stepsize
-	} else
-	{
-	    stepSize = 1;
-	}
-    } else if (strcmp(DRV_imgsGetImagerName(), "OMNIVISION_OV271X_1080P") == 0) // OV271X sensor
-    {
-	if(gFlicker == VIDEO_NTSC)			// 60 Hz flicker
-	{
-	    if (gALG_aewbObj.sensorFps == 25)
-		DRV_imgsSetFlicker(0x12);
-	    else if (gALG_aewbObj.sensorFps == 30)
-		DRV_imgsSetFlicker(0x22);
-	} else if(gFlicker == VIDEO_PAL)	// 50 Hz flicker
-	{
-	    if (gALG_aewbObj.sensorFps == 25)
-		DRV_imgsSetFlicker(0x11);
-	    else if (gALG_aewbObj.sensorFps == 30)
-		DRV_imgsSetFlicker(0x21);
-	} else
-	{
-	    DRV_imgsSetFlicker(0);;
-	}
+        if (gALG_aewbObj.sensorFps == 20)
+        {
+        stepSize = 7200; 	// Exposure stepsize
+        if (sensorExposureMax > 33333)
+            sensorExposureMax = 43200;
+        }
+        else if (gALG_aewbObj.sensorFps == 25)
+        stepSize = 9000; 	// Exposure stepsize
+        else if (gALG_aewbObj.sensorFps == 30)
+        stepSize = 10800; 	// Exposure stepsize
     } else
     {
-	stepSize = 1;
+        stepSize = 1;
+    }
+    } else if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9M034_720P") == 0) // MT9M034 sensor
+    {
+    if(gFlicker == VIDEO_NTSC)			// 60 Hz flicker
+    {
+        if (gALG_aewbObj.sensorFps == 25)
+        stepSize = 7084; 	// Exposure stepsize
+        else if (gALG_aewbObj.sensorFps == 30)
+        stepSize = 8500; 	// Exposure stepsize
+    } else if(gFlicker == VIDEO_PAL)	// 50 Hz flicker
+    {
+        if (gALG_aewbObj.sensorFps == 25)
+        stepSize = 8500; 	// Exposure stepsize
+        else if (gALG_aewbObj.sensorFps == 30)
+        stepSize = 10200; 	// Exposure stepsize
+    } else
+    {
+        stepSize = 1;
+    }
+    } else if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9P031_5MP") == 0) // MT9M031 sensor
+    {
+    if(gFlicker == VIDEO_NTSC)			// 60 Hz flicker
+    {
+        stepSize = 8333; 	// Exposure stepsize
+    } else if(gFlicker == VIDEO_PAL)	// 50 Hz flicker
+    {
+        stepSize = 10000; 	// Exposure stepsize
+    } else
+    {
+        stepSize = 1;
+    }
+    } else if (strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0) // IMX136 sensor
+    {
+    if(gFlicker == VIDEO_NTSC)			// 60 Hz flicker
+    {
+        stepSize = 8333; 	// Exposure stepsize
+    } else if(gFlicker == VIDEO_PAL)	// 50 Hz flicker
+    {
+        stepSize = 10000; 	// Exposure stepsize
+    } else
+    {
+        stepSize = 1;
+    }
+    } else if (strcmp(DRV_imgsGetImagerName(), "OMNIVISION_OV271X_1080P") == 0) // OV271X sensor
+    {
+    if(gFlicker == VIDEO_NTSC)			// 60 Hz flicker
+    {
+        if (gALG_aewbObj.sensorFps == 25)
+        DRV_imgsSetFlicker(0x12);
+        else if (gALG_aewbObj.sensorFps == 30)
+        DRV_imgsSetFlicker(0x22);
+    } else if(gFlicker == VIDEO_PAL)	// 50 Hz flicker
+    {
+        if (gALG_aewbObj.sensorFps == 25)
+        DRV_imgsSetFlicker(0x11);
+        else if (gALG_aewbObj.sensorFps == 30)
+        DRV_imgsSetFlicker(0x21);
+    } else
+    {
+        DRV_imgsSetFlicker(0);;
+    }
+    } else
+    {
+    stepSize = 1;
     }
 
 #ifdef FD_DEBUG_MSG
@@ -637,18 +899,18 @@ int TI_2A_config(int flicker_detection, int saldre)
 
     if (HISTmode == 8) // ALTM enable
     {
-	aeDynamicParams.exposureTimeRange[i].min = 0x20*32;
-	aeDynamicParams.exposureTimeRange[i].max = sensorExposureMax;
+    aeDynamicParams.exposureTimeRange[i].min = 0x20*32;
+    aeDynamicParams.exposureTimeRange[i].max = sensorExposureMax;
     } else
     {
-	if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0)
-	{
-	    aeDynamicParams.exposureTimeRange[i].min = 0x10*32;
-	} else
-	{
-	    aeDynamicParams.exposureTimeRange[i].min = stepSize;
-	}
-	aeDynamicParams.exposureTimeRange[i].max = sensorExposureMax;
+    if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0)
+    {
+        aeDynamicParams.exposureTimeRange[i].min = 0x10*32;
+    } else
+    {
+        aeDynamicParams.exposureTimeRange[i].min = stepSize;
+    }
+    aeDynamicParams.exposureTimeRange[i].max = sensorExposureMax;
     }
 
     aeDynamicParams.apertureLevelRange[i].min = 0;
@@ -668,39 +930,39 @@ int TI_2A_config(int flicker_detection, int saldre)
 
     if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0)
     {
-	if (HighGain)
-	    aeDynamicParams.sensorGainRange[i].max = 5001;
-	else if (lowlight)
-	    aeDynamicParams.sensorGainRange[i].max = 3001;
-	else
-	    aeDynamicParams.sensorGainRange[i].max = 2001;
+    if (HighGain)
+        aeDynamicParams.sensorGainRange[i].max = 5001;
+    else if (lowlight)
+        aeDynamicParams.sensorGainRange[i].max = 3001;
+    else
+        aeDynamicParams.sensorGainRange[i].max = 2001;
     } else if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9P031_5MP") == 0)
     {
-	extern int gIRCut, gBWMode;
-	if (HighGain)
-	    aeDynamicParams.sensorGainRange[i].max = 2000;
-	else if (lowlight && (!gBWMode || gIRCut != 0))
-	    aeDynamicParams.sensorGainRange[i].max = 2000;
-	else if (lowlight)
-	    aeDynamicParams.sensorGainRange[i].max = 2000;
-	else
-	    aeDynamicParams.sensorGainRange[i].max = 2000;
+    extern int gIRCut, gBWMode;
+    if (HighGain)
+        aeDynamicParams.sensorGainRange[i].max = 2000;
+    else if (lowlight && (!gBWMode || gIRCut != 0))
+        aeDynamicParams.sensorGainRange[i].max = 2000;
+    else if (lowlight)
+        aeDynamicParams.sensorGainRange[i].max = 2000;
+    else
+        aeDynamicParams.sensorGainRange[i].max = 2000;
     } else if (strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0)
     {
         if (HighGain)
-	    aeDynamicParams.sensorGainRange[i].max = 100000; // logarithmic
-	else if (lowlight)
-	    aeDynamicParams.sensorGainRange[i].max = 15800;
-	else
-	    aeDynamicParams.sensorGainRange[i].max = 3000;
+        aeDynamicParams.sensorGainRange[i].max = 100000; // logarithmic
+    else if (lowlight)
+        aeDynamicParams.sensorGainRange[i].max = 15800;
+    else
+        aeDynamicParams.sensorGainRange[i].max = 3000;
     } else
     {
-	if (HighGain)
-	    aeDynamicParams.sensorGainRange[i].max = 2000;
-	else if (lowlight)
-	    aeDynamicParams.sensorGainRange[i].max = 2000;
-	else
-	    aeDynamicParams.sensorGainRange[i].max = 1500;
+    if (HighGain)
+        aeDynamicParams.sensorGainRange[i].max = 2000;
+    else if (lowlight)
+        aeDynamicParams.sensorGainRange[i].max = 2000;
+    else
+        aeDynamicParams.sensorGainRange[i].max = 1500;
     }
     aeDynamicParams.ipipeGainRange[i].min = 0;
     aeDynamicParams.ipipeGainRange[i].max = 0;
@@ -716,63 +978,63 @@ int TI_2A_config(int flicker_detection, int saldre)
 
     if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9P031_5MP") == 0)
     {
-	if (lowlight)
-	    aeDynamicParams.ipipeGainRange[i].max = 4096;
-	else
-	    aeDynamicParams.ipipeGainRange[i].max = 6144;
+    if (lowlight)
+        aeDynamicParams.ipipeGainRange[i].max = 4096;
+    else
+        aeDynamicParams.ipipeGainRange[i].max = 6144;
     }
     if (strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0)
     {
-	aeDynamicParams.ipipeGainRange[i].max = 4096;
+    aeDynamicParams.ipipeGainRange[i].max = 4096;
     }
     else
-	aeDynamicParams.ipipeGainRange[i].max = 6144;
+    aeDynamicParams.ipipeGainRange[i].max = 6144;
 
     if(gFlicker == VIDEO_NONE) // More sensitive then not use flicker control
     {
-	aeDynamicParams.targetBrightnessRange.min = 38;
-	aeDynamicParams.targetBrightnessRange.max = 42;
-	aeDynamicParams.targetBrightness = 40;
-	aeDynamicParams.thrld = 4;
+    aeDynamicParams.targetBrightnessRange.min = 38;
+    aeDynamicParams.targetBrightnessRange.max = 42;
+    aeDynamicParams.targetBrightness = 40;
+    aeDynamicParams.thrld = 4;
     } else
     {
-	aeDynamicParams.targetBrightnessRange.min = 33;
-	aeDynamicParams.targetBrightnessRange.max = 47;
-	aeDynamicParams.targetBrightness = 40;
-	aeDynamicParams.thrld = 14;
+    aeDynamicParams.targetBrightnessRange.min = 33;
+    aeDynamicParams.targetBrightnessRange.max = 47;
+    aeDynamicParams.targetBrightness = 40;
+    aeDynamicParams.thrld = 14;
     }
 
     aeDynamicParams.exposureTimeStepSize = stepSize;
 
     memcpy((void *)&gALG_aewbObj.AE_InArgs.statMat,
-	   (void *)&gALG_aewbObj.IAEWB_StatMatdata,
-	   sizeof(IAEWB_StatMat) );
+       (void *)&gALG_aewbObj.IAEWB_StatMatdata,
+       sizeof(IAEWB_StatMat) );
 
     memcpy( (void *)&gALG_aewbObj.AWB_InArgs.statMat,
-	   (void *)&gALG_aewbObj.IAEWB_StatMatdata,
-	   sizeof(IAEWB_StatMat) );
+       (void *)&gALG_aewbObj.IAEWB_StatMatdata,
+       sizeof(IAEWB_StatMat) );
 
     retval = AE_TI_AE.control((IAE_Handle)gALG_aewbObj.handle_ae, IAE_CMD_SET_CONFIG, &aeDynamicParams, NULL);
     if(retval == -1) {
-	OSA_ERROR("AE_TI_AE.control()\n");
-	return retval;
+    OSA_ERROR("AE_TI_AE.control()\n");
+    return retval;
     }
 
     if(flicker_detection == 1) sensorExposure = stepSize;
     ALG_aewbSetSensorExposure(sensorExposure);
 
     /* Pass calibration data to TI AWB */
-    retval = IMAGE_TUNE_GetAwbParams(&awb_calc_data);
+    //retval = IMAGE_TUNE_GetAwbParams(&awb_calc_data);
     retval = AWB_TI_AWB.control((IAWB_Handle)gALG_aewbObj.handle_awb, TIAWB_CMD_CALIBRATION, &awb_calc_data, NULL);
     if(retval == -1) {
-	OSA_ERROR("AWB_TI_AWB.control()\n");
-	return retval;
+    OSA_ERROR("AWB_TI_AWB.control()\n");
+    return retval;
     }
 
     return 0;
 }
 
-static int Get_BoxCar_Statistics(void)
+static int Get_BoxCar_Statistics(ALG_aewbf_stat *stat)
 {
     int status, i, i1, i2;
     int bufId=-1;
@@ -780,9 +1042,9 @@ static int Get_BoxCar_Statistics(void)
     int w = gDRV_ipipeObj.boxcarInfo.width;
     int h = gDRV_ipipeObj.boxcarInfo.height;
     int sz = w*h, sz3 = sz*3, sz4 = sz*4;
-    int R, G, B, Y, GR, GB, Grad;
-    Uint16 *box;
-    int hsz = 1<<12, hist[hsz], min[2], max[2];
+    Uint32 R, G, B, Y, Y1, GR, GB, Grad;
+    Uint16 *box = stat->box;
+    Uint32 hsz = ALG_SENSOR_BITS, *hist = stat->hist;
     int sum, th = sz/100;
 
     //Uint16 *curLineAddr;
@@ -801,6 +1063,8 @@ static int Get_BoxCar_Statistics(void)
     DRV_ipipePutBoxcarBuf(bufId);
 
     if(pBufInfo) {
+        //Clear histogram
+        memset(hist, 0, sizeof(Uint32)*hsz);
 
         box = pBufInfo->virtAddr;
 
@@ -813,22 +1077,30 @@ static int Get_BoxCar_Statistics(void)
             B += box[i2];
             GR += abs(box[i1] - box[i ]);
             GB += abs(box[i1] - box[i2]);
-            Y += (306*box[i  ] + 601*box[i+1] + 117*box[i+2])>>10;
-            hist[Y>>2]++;
+            Y1 = (306*box[i  ] + 601*box[i1] + 117*box[i2])>>12;
+            Y += Y1;
+            if(Y1 >= hsz || hist == NULL) {
+                OSA_printf("Error !!!! R = %d G = %d B = %d Y = %d \n", box[i ]>>2, box[i1]>>2, box[i2]>>2, Y1);
+                return 0;
+            }
+
+            hist[Y1]++;
         }
-        R = R/sz>>2; G = G/sz>>2; B = B/sz>>2; Y = Y/sz>>2; GR = GR/sz>>2; GB = GB/sz>>2;
+        stat->R = R/sz>>2; stat->G = G/sz>>2; stat->B = B/sz>>2;
+        stat->Y = Y/sz; stat->GR = GR/sz>>2; stat->GB = GB/sz>>2;
 
         //Find max and min in histogram
         sum = 0;
-        for(i=0; sum < th; i++); sum += hist[i];
-        min[0] = i; min[1] = sum;
+        for(i=0; sum < th; i++) sum += hist[i];
+        stat->min[0] = i; stat->min[1] = sum;
+
         sum = 0;
-        for(i=hsz-1; sum < th; i--); sum += hist[i];
-        max[0] = i; max[1] = sum;
+        for(i=hsz-1; sum < th; i--) sum += hist[i];
+        stat->max[0] = i; stat->max[1] = sum;
 
         #ifdef FD_DEBUG_MSG
         OSA_printf("Boxcar Avg Color: sz = %d R = %d G = %d B = %d Y = %d min = %d minv = %d max = %d maxv = %d GR = %d GB = %d\n",
-                   sz, R, G, B, Y, min[0], min[1], max[0], max[1], GR, GB);
+                   sz, stat->R, stat->G, stat->B, stat->Y, stat->min[0], stat->min[1], stat->max[0], stat->max[1], stat->GR, stat->GB);
         #endif
     }
 
@@ -1207,7 +1479,7 @@ void TI2AFunc(void *pAddr)
     int AE_customdata;
     Uint16 *box;
 
-    Get_BoxCar_Statistics();
+    Get_BoxCar_Statistics(&ALG_SIG);
 
     GETTING_RGB_BLOCK_VALUE(pAddr, rgbData, aew_data, 2);
 
@@ -1215,118 +1487,295 @@ void TI2AFunc(void *pAddr)
      calibration data has been created by the tuning tool and need to be used,
      the following code needs to be enabled for to pass new tuning data in */
     if (IMAGE_TUNE_CmdGetAwbPrmStatus(&i) ){
-	retval = IMAGE_TUNE_GetAwbParams(&awb_calc_data);
-	retval = AWB_TI_AWB.control((IAWB_Handle)gALG_aewbObj.handle_awb, TIAWB_CMD_CALIBRATION, &awb_calc_data, NULL);
-	IMAGE_TUNE_CmdSetAwbPrmStatus(0); //reset flag
+    retval = IMAGE_TUNE_GetAwbParams(&awb_calc_data);
+    retval = AWB_TI_AWB.control((IAWB_Handle)gALG_aewbObj.handle_awb, TIAWB_CMD_CALIBRATION, &awb_calc_data, NULL);
+    IMAGE_TUNE_CmdSetAwbPrmStatus(0); //reset flag
     }
     if (Aew_ext_parameter.aew_enable == AEW_ENABLE && !(aewbFrames % NUM_STEPS) )
     {
-	gALG_aewbObj.AE_InArgs.curAe.exposureTime = sensorExposure;
-	gALG_aewbObj.AE_InArgs.curAe.sensorGain = sensorGain;
-	gALG_aewbObj.AE_InArgs.curAe.ipipeGain = ipipe_awb_gain.dGain << 2;
-	gALG_aewbObj.AE_InArgs.curWb.rGain = ipipe_awb_gain.rGain;
-	gALG_aewbObj.AE_InArgs.curWb.gGain = ipipe_awb_gain.grGain;
-	gALG_aewbObj.AE_InArgs.curWb.bGain = ipipe_awb_gain.bGain;
-	AE_customdata = HISTmode;
+    gALG_aewbObj.AE_InArgs.curAe.exposureTime = sensorExposure;
+    gALG_aewbObj.AE_InArgs.curAe.sensorGain = sensorGain;
+    gALG_aewbObj.AE_InArgs.curAe.ipipeGain = ipipe_awb_gain.dGain << 2;
+    gALG_aewbObj.AE_InArgs.curWb.rGain = ipipe_awb_gain.rGain;
+    gALG_aewbObj.AE_InArgs.curWb.gGain = ipipe_awb_gain.grGain;
+    gALG_aewbObj.AE_InArgs.curWb.bGain = ipipe_awb_gain.bGain;
+    AE_customdata = HISTmode;
 
-	if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0)
-	{
-	    AE_customdata += 10;
-	}
+    if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0)
+    {
+        AE_customdata += 10;
+    }
 
-	//OSA_printf("pixCtWin= %d AE_customdata = %d\n", gALG_aewbObj.AE_InArgs.statMat.pixCtWin, AE_customdata);
+    //OSA_printf("pixCtWin= %d AE_customdata = %d\n", gALG_aewbObj.AE_InArgs.statMat.pixCtWin, AE_customdata);
 
-	if(gALG_aewbObj.aewbType == ALG_AEWB_AE || gALG_aewbObj.aewbType == ALG_AEWB_AEWB){
-	    AE_TI_AE.process(
-			     (IAE_Handle)gALG_aewbObj.handle_ae,
-			     &gALG_aewbObj.AE_InArgs,
-			     &gALG_aewbObj.AE_OutArgs,
-			     rgbData,
-			     gALG_aewbObj.weight,
-			     AE_customdata
-			    );
-		if (strcmp(DRV_imgsGetImagerName(), "OMNIVISION_OV271X_1080P") == 0)
-		{
-			AE_OV271X_Night_Gain();
-		}
-	}
-	else {
-	    gALG_aewbObj.AE_OutArgs.nextAe = gALG_aewbObj.AE_InArgs.curAe;
-	}
+    if(gALG_aewbObj.aewbType == ALG_AEWB_AE || gALG_aewbObj.aewbType == ALG_AEWB_AEWB){
+        AE_TI_AE.process(
+                 (IAE_Handle)gALG_aewbObj.handle_ae,
+                 &gALG_aewbObj.AE_InArgs,
+                 &gALG_aewbObj.AE_OutArgs,
+                 rgbData,
+                 gALG_aewbObj.weight,
+                 AE_customdata
+                );
+        if (strcmp(DRV_imgsGetImagerName(), "OMNIVISION_OV271X_1080P") == 0)
+        {
+            AE_OV271X_Night_Gain();
+        }
+    }
+    else {
+        gALG_aewbObj.AE_OutArgs.nextAe = gALG_aewbObj.AE_InArgs.curAe;
+    }
 
-	FD_brightness_cur = ((float)gALG_aewbObj.AE_InArgs.curAe.exposureTime) * gALG_aewbObj.AE_InArgs.curAe.sensorGain * gALG_aewbObj.AE_InArgs.curAe.ipipeGain;
-	FD_brightness_next = ((float)gALG_aewbObj.AE_OutArgs.nextAe.exposureTime) * gALG_aewbObj.AE_OutArgs.nextAe.sensorGain * gALG_aewbObj.AE_OutArgs.nextAe.ipipeGain;
+    FD_brightness_cur = ((float)gALG_aewbObj.AE_InArgs.curAe.exposureTime) * gALG_aewbObj.AE_InArgs.curAe.sensorGain * gALG_aewbObj.AE_InArgs.curAe.ipipeGain;
+    FD_brightness_next = ((float)gALG_aewbObj.AE_OutArgs.nextAe.exposureTime) * gALG_aewbObj.AE_OutArgs.nextAe.sensorGain * gALG_aewbObj.AE_OutArgs.nextAe.ipipeGain;
 
-	/* Trigger Flicker detection process based on brightness threshold being crossed */
-	if(FD_brightness_next < FD_BRIGHTNESS_THRESHHOLD && FD_brightness_cur >= FD_BRIGHTNESS_THRESHHOLD)
-	{
-	    flicker_detect_complete =0;
-	}
+    /* Trigger Flicker detection process based on brightness threshold being crossed */
+    if(FD_brightness_next < FD_BRIGHTNESS_THRESHHOLD && FD_brightness_cur >= FD_BRIGHTNESS_THRESHHOLD)
+    {
+        flicker_detect_complete =0;
+    }
 
-	if(FD_brightness_next > FD_BRIGHTNESS_THRESHHOLD && FD_brightness_cur <= FD_BRIGHTNESS_THRESHHOLD)
-	{
-	    TI_2A_config(1, gALG_aewbObj.saldre);
-	}
+    if(FD_brightness_next > FD_BRIGHTNESS_THRESHHOLD && FD_brightness_cur <= FD_BRIGHTNESS_THRESHHOLD)
+    {
+        TI_2A_config(1, gALG_aewbObj.saldre);
+    }
 
-	if(gALG_aewbObj.AE_OutArgs.nextAe.exposureTime == gALG_aewbObj.AE_InArgs.curAe.exposureTime &&
-	   gALG_aewbObj.AE_OutArgs.nextAe.sensorGain == gALG_aewbObj.AE_InArgs.curAe.sensorGain &&
-	   (gALG_aewbObj.aewbType == ALG_AEWB_AWB || gALG_aewbObj.aewbType == ALG_AEWB_AEWB) ||
-	   (strcmp(DRV_imgsGetImagerName(), "OMNIVISION_OV271X_1080P") == 0))
-	    //   gALG_aewbObj.AE_OutArgs.nextAe.ipipeGain == gALG_aewbObj.AE_InArgs.curAe.ipipeGain)
-	{
-	    /* calling awb only we AE has converged */
-	    gALG_aewbObj.AWB_InArgs.curWb = gALG_aewbObj.AE_InArgs.curWb;
-	    gALG_aewbObj.AWB_InArgs.curAe = gALG_aewbObj.AE_InArgs.curAe;
-        /*
-	    AWB_TI_AWB.process(
-			       (IAWB_Handle)gALG_aewbObj.handle_awb,
-			       &gALG_aewbObj.AWB_InArgs,
-			       &gALG_aewbObj.AWB_OutArgs,
-			       rgbData,
-			       NULL
-			      );
-        */
-	    if (gALG_aewbObj.aewbVendor == ALG_AEWB_ID_SIG)
-	    {
-		// Sigrand AWB algorithm
-		AWB_Sigrand_process(
-				    (IAWB_Handle)gALG_aewbObj.handle_awb,
-				    &gALG_aewbObj.AWB_InArgs,
-				    &gALG_aewbObj.AWB_OutArgs,
-				    rgbData,
-				    gALG_aewbObj.weight,
-				    NULL
-				   );
-	    }
-	    ipipe_awb_gain.rGain = gALG_aewbObj.AWB_OutArgs.nextWb.rGain;
-	    ipipe_awb_gain.grGain = gALG_aewbObj.AWB_OutArgs.nextWb.gGain;
-	    ipipe_awb_gain.gbGain = gALG_aewbObj.AWB_OutArgs.nextWb.gGain;
-	    ipipe_awb_gain.bGain = gALG_aewbObj.AWB_OutArgs.nextWb.bGain;
+    if(gALG_aewbObj.AE_OutArgs.nextAe.exposureTime == gALG_aewbObj.AE_InArgs.curAe.exposureTime &&
+       gALG_aewbObj.AE_OutArgs.nextAe.sensorGain == gALG_aewbObj.AE_InArgs.curAe.sensorGain &&
+       (gALG_aewbObj.aewbType == ALG_AEWB_AWB || gALG_aewbObj.aewbType == ALG_AEWB_AEWB) ||
+       (strcmp(DRV_imgsGetImagerName(), "OMNIVISION_OV271X_1080P") == 0))
+        //   gALG_aewbObj.AE_OutArgs.nextAe.ipipeGain == gALG_aewbObj.AE_InArgs.curAe.ipipeGain)
+    {
+        /* calling awb only we AE has converged */
+        gALG_aewbObj.AWB_InArgs.curWb = gALG_aewbObj.AE_InArgs.curWb;
+        gALG_aewbObj.AWB_InArgs.curAe = gALG_aewbObj.AE_InArgs.curAe;
 
-	    for(i = 0; i < NUM_RGB2RGB_MATRIXES-1; i ++){
-		diff = gALG_aewbObj.AWB_OutArgs.nextWb.colorTemp - rgb_maxtrixes[i].color_temp;
-		next_diff = rgb_maxtrixes[i+1].color_temp - gALG_aewbObj.AWB_OutArgs.nextWb.colorTemp;
-		if((next_diff >= 0 && diff >= 0) || diff < 0){
-		    if(next_diff < diff) i++;
-		    break;
-		}
-	    }
+        AWB_TI_AWB.process(
+                   (IAWB_Handle)gALG_aewbObj.handle_awb,
+                   &gALG_aewbObj.AWB_InArgs,
+                   &gALG_aewbObj.AWB_OutArgs,
+                   rgbData,
+                   NULL
+                  );
 
-	    if (i >= NUM_RGB2RGB_MATRIXES) i = NUM_RGB2RGB_MATRIXES - 1;
+        if (gALG_aewbObj.aewbVendor == ALG_AEWB_ID_SIG)
+        {
+        // Sigrand AWB algorithm
+        AWB_Sigrand_process(
+                    (IAWB_Handle)gALG_aewbObj.handle_awb,
+                    &gALG_aewbObj.AWB_InArgs,
+                    &gALG_aewbObj.AWB_OutArgs,
+                    rgbData,
+                    gALG_aewbObj.weight,
+                    NULL
+                   );
+        }
+        ipipe_awb_gain.rGain = gALG_aewbObj.AWB_OutArgs.nextWb.rGain;
+        ipipe_awb_gain.grGain = gALG_aewbObj.AWB_OutArgs.nextWb.gGain;
+        ipipe_awb_gain.gbGain = gALG_aewbObj.AWB_OutArgs.nextWb.gGain;
+        ipipe_awb_gain.bGain = gALG_aewbObj.AWB_OutArgs.nextWb.bGain;
+
+        for(i = 0; i < NUM_RGB2RGB_MATRIXES-1; i ++){
+        diff = gALG_aewbObj.AWB_OutArgs.nextWb.colorTemp - rgb_maxtrixes[i].color_temp;
+        next_diff = rgb_maxtrixes[i+1].color_temp - gALG_aewbObj.AWB_OutArgs.nextWb.colorTemp;
+        if((next_diff >= 0 && diff >= 0) || diff < 0){
+            if(next_diff < diff) i++;
+            break;
+        }
+        }
+
+        if (i >= NUM_RGB2RGB_MATRIXES) i = NUM_RGB2RGB_MATRIXES - 1;
 
 
-	    rgbMatrixIndex = RGB2RGB_stab(i);
+        rgbMatrixIndex = RGB2RGB_stab(i);
 
-	    ALG_aewbSetRgb2Rgb(&rgb_maxtrixes[rgbMatrixIndex].rgb2rgbparam);
-	    ALG_aewbSetRgb2Rgb2(&rgb_maxtrixes[rgbMatrixIndex].rgb2rgb2param);
-	    TI2A_applySettings(&gALG_aewbObj.AE_InArgs.curAe,
-			       &gALG_aewbObj.AE_OutArgs.nextAe, NUM_STEPS-1, 0);
+        ALG_aewbSetRgb2Rgb(&rgb_maxtrixes[rgbMatrixIndex].rgb2rgbparam);
+        ALG_aewbSetRgb2Rgb2(&rgb_maxtrixes[rgbMatrixIndex].rgb2rgb2param);
+        TI2A_applySettings(&gALG_aewbObj.AE_InArgs.curAe,
+                   &gALG_aewbObj.AE_OutArgs.nextAe, NUM_STEPS-1, 0);
 
-	}
-	AEW_SETUP_CONTROL( &TI_Control3A );
+    }
+    AEW_SETUP_CONTROL( &TI_Control3A );
     }
     else if(Aew_ext_parameter.aew_enable == AEW_ENABLE && (gALG_aewbObj.aewbType == ALG_AEWB_AE || gALG_aewbObj.aewbType == ALG_AEWB_AEWB)){
-	TI2A_applySettings(&gALG_aewbObj.AE_InArgs.curAe, &gALG_aewbObj.AE_OutArgs.nextAe, NUM_STEPS-1, (aewbFrames % NUM_STEPS));
+    TI2A_applySettings(&gALG_aewbObj.AE_InArgs.curAe, &gALG_aewbObj.AE_OutArgs.nextAe, NUM_STEPS-1, (aewbFrames % NUM_STEPS));
+    }
+
+    /* remove the count and put it into the process */
+    aewbFrames ++;
+
+}
+
+void SIG2A_applySettings(IAEWB_Ae *curAe, IAEWB_Ae *nextAe, int numSmoothSteps, int step)
+{
+  if (gALG_aewbObj.afEnable == 1)
+      return;
+
+  int delta_sensorgain = ((int)nextAe->sensorGain - (int)curAe->sensorGain)/numSmoothSteps;
+  int delta_exposure = ((int)nextAe->exposureTime - (int)curAe->exposureTime)/numSmoothSteps;
+  int delta_ipipe = ((int)nextAe->ipipeGain - (int)curAe->ipipeGain)/numSmoothSteps;
+
+  step ++;
+
+  sensorGain = delta_sensorgain * step + curAe->sensorGain;
+  sensorExposure = delta_exposure * step + curAe->exposureTime;
+  ipipe_awb_gain.dGain = (delta_ipipe * step +curAe->ipipeGain) >> 2;
+
+  if(step >= numSmoothSteps) {
+    sensorGain = nextAe->sensorGain;
+    sensorExposure = nextAe->exposureTime;
+    ipipe_awb_gain.dGain = nextAe->ipipeGain>> 2;
+  }
+
+  if (strcmp(DRV_imgsGetImagerName(), "OMNIVISION_OV271X_1080P") == 0)
+  {
+      sensorGain = OV271X_gain;
+  }
+
+  ipipe_awb_gain.hGain_minmax = HISTgain_minmax;
+  ipipe_awb_gain.hGain_mid = HISTgain_mid;
+  ipipe_awb_gain.hMin = HISTmin;
+  ipipe_awb_gain.hMode = HISTmode;
+
+  ALG_aewbSetIpipeWb(&ipipe_awb_gain, gALG_aewbObj.DGainEnable, lowlight);
+  ALG_aewbSetSensorExposure(sensorExposure);
+  if (gALG_aewbObj.AGainEnable)
+  {
+      //ALG_aewbSetSensorGain(sensorGain);
+  }
+}
+
+void SIG2AFunc(void *pAddr)
+{
+    int i = 0, retval = OSA_SOK ;
+    CONTROL3AS TI_Control3A;
+    int rgbMatrixIndex = 0;
+    int diff, next_diff;
+    float FD_brightness_cur;
+    float FD_brightness_next;
+    int AE_customdata;
+    Uint16 *box;
+
+    Get_BoxCar_Statistics(&ALG_SIG);
+
+    GETTING_RGB_BLOCK_VALUE(pAddr, rgbData, aew_data, 2);
+
+    /* Xiangdong: we need a flag from the tuning serser to signal to the AWB thread that a new set of
+     calibration data has been created by the tuning tool and need to be used,
+     the following code needs to be enabled for to pass new tuning data in */
+    //if (IMAGE_TUNE_CmdGetAwbPrmStatus(&i) ){
+    //retval = IMAGE_TUNE_GetAwbParams(&awb_calc_data);
+    //retval = AWB_TI_AWB.control((IAWB_Handle)gALG_aewbObj.handle_awb, TIAWB_CMD_CALIBRATION, &awb_calc_data, NULL);
+    //IMAGE_TUNE_CmdSetAwbPrmStatus(0); //reset flag
+    //}
+    if (Aew_ext_parameter.aew_enable == AEW_ENABLE && !(aewbFrames % NUM_STEPS) )
+    {
+        gALG_aewbObj.AE_InArgs.curAe.exposureTime = sensorExposure;
+        gALG_aewbObj.AE_InArgs.curAe.sensorGain = sensorGain;
+        gALG_aewbObj.AE_InArgs.curAe.ipipeGain = ipipe_awb_gain.dGain << 2;
+        gALG_aewbObj.AE_InArgs.curWb.rGain = ipipe_awb_gain.rGain;
+        gALG_aewbObj.AE_InArgs.curWb.gGain = ipipe_awb_gain.grGain;
+        gALG_aewbObj.AE_InArgs.curWb.bGain = ipipe_awb_gain.bGain;
+        AE_customdata = HISTmode;
+
+        if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0)
+        {
+            AE_customdata += 10;
+        }
+
+        OSA_printf("pixCtWin= %d AE_customdata = %d\n", gALG_aewbObj.AE_InArgs.statMat.pixCtWin, AE_customdata);
+
+        if(gALG_aewbObj.aewbType == ALG_AEWB_AE || gALG_aewbObj.aewbType == ALG_AEWB_AEWB){
+            AE_SIG_AE.process(
+                        (IAE_Handle)gALG_aewbObj.handle_ae,
+                        &gALG_aewbObj.AE_InArgs,
+                        &gALG_aewbObj.AE_OutArgs,
+                        rgbData,
+                        gALG_aewbObj.weight,
+                        AE_customdata
+                        );
+            if (strcmp(DRV_imgsGetImagerName(), "OMNIVISION_OV271X_1080P") == 0)
+            {
+                AE_OV271X_Night_Gain();
+            }
+        }
+        else {
+            gALG_aewbObj.AE_OutArgs.nextAe = gALG_aewbObj.AE_InArgs.curAe;
+        }
+
+        FD_brightness_cur = ((float)gALG_aewbObj.AE_InArgs.curAe.exposureTime) * gALG_aewbObj.AE_InArgs.curAe.sensorGain * gALG_aewbObj.AE_InArgs.curAe.ipipeGain;
+        FD_brightness_next = ((float)gALG_aewbObj.AE_OutArgs.nextAe.exposureTime) * gALG_aewbObj.AE_OutArgs.nextAe.sensorGain * gALG_aewbObj.AE_OutArgs.nextAe.ipipeGain;
+
+        /* Trigger Flicker detection process based on brightness threshold being crossed */
+        if(FD_brightness_next < FD_BRIGHTNESS_THRESHHOLD && FD_brightness_cur >= FD_BRIGHTNESS_THRESHHOLD)
+        {
+            flicker_detect_complete =0;
+        }
+
+        if(FD_brightness_next > FD_BRIGHTNESS_THRESHHOLD && FD_brightness_cur <= FD_BRIGHTNESS_THRESHHOLD)
+        {
+            TI_2A_config(1, gALG_aewbObj.saldre);
+        }
+
+        if(gALG_aewbObj.AE_OutArgs.nextAe.exposureTime == gALG_aewbObj.AE_InArgs.curAe.exposureTime &&
+                gALG_aewbObj.AE_OutArgs.nextAe.sensorGain == gALG_aewbObj.AE_InArgs.curAe.sensorGain &&
+                (gALG_aewbObj.aewbType == ALG_AEWB_AWB || gALG_aewbObj.aewbType == ALG_AEWB_AEWB) ||
+                (strcmp(DRV_imgsGetImagerName(), "OMNIVISION_OV271X_1080P") == 0))
+            //   gALG_aewbObj.AE_OutArgs.nextAe.ipipeGain == gALG_aewbObj.AE_InArgs.curAe.ipipeGain)
+        {
+            /* calling awb only we AE has converged */
+            gALG_aewbObj.AWB_InArgs.curWb = gALG_aewbObj.AE_InArgs.curWb;
+            gALG_aewbObj.AWB_InArgs.curAe = gALG_aewbObj.AE_InArgs.curAe;
+
+            AWB_TI_AWB.process(
+                        (IAWB_Handle)gALG_aewbObj.handle_awb,
+                        &gALG_aewbObj.AWB_InArgs,
+                        &gALG_aewbObj.AWB_OutArgs,
+                        rgbData,
+                        NULL
+                        );
+
+            if (gALG_aewbObj.aewbVendor == ALG_AEWB_ID_SIG)
+            {
+                // Sigrand AWB algorithm
+                AWB_Sigrand_process(
+                            (IAWB_Handle)gALG_aewbObj.handle_awb,
+                            &gALG_aewbObj.AWB_InArgs,
+                            &gALG_aewbObj.AWB_OutArgs,
+                            rgbData,
+                            gALG_aewbObj.weight,
+                            NULL
+                            );
+            }
+            ipipe_awb_gain.rGain = gALG_aewbObj.AWB_OutArgs.nextWb.rGain;
+            ipipe_awb_gain.grGain = gALG_aewbObj.AWB_OutArgs.nextWb.gGain;
+            ipipe_awb_gain.gbGain = gALG_aewbObj.AWB_OutArgs.nextWb.gGain;
+            ipipe_awb_gain.bGain = gALG_aewbObj.AWB_OutArgs.nextWb.bGain;
+
+            for(i = 0; i < NUM_RGB2RGB_MATRIXES-1; i ++){
+                diff = gALG_aewbObj.AWB_OutArgs.nextWb.colorTemp - rgb_maxtrixes[i].color_temp;
+                next_diff = rgb_maxtrixes[i+1].color_temp - gALG_aewbObj.AWB_OutArgs.nextWb.colorTemp;
+                if((next_diff >= 0 && diff >= 0) || diff < 0){
+                    if(next_diff < diff) i++;
+                    break;
+                }
+            }
+
+            if (i >= NUM_RGB2RGB_MATRIXES) i = NUM_RGB2RGB_MATRIXES - 1;
+
+
+            rgbMatrixIndex = RGB2RGB_stab(i);
+
+            ALG_aewbSetRgb2Rgb(&rgb_maxtrixes[rgbMatrixIndex].rgb2rgbparam);
+            ALG_aewbSetRgb2Rgb2(&rgb_maxtrixes[rgbMatrixIndex].rgb2rgb2param);
+            SIG2A_applySettings(&gALG_aewbObj.AE_InArgs.curAe,
+                               &gALG_aewbObj.AE_OutArgs.nextAe, NUM_STEPS-1, 0);
+
+        }
+        AEW_SETUP_CONTROL( &TI_Control3A );
+    }
+    else if(Aew_ext_parameter.aew_enable == AEW_ENABLE && (gALG_aewbObj.aewbType == ALG_AEWB_AE || gALG_aewbObj.aewbType == ALG_AEWB_AEWB)){
+        SIG2A_applySettings(&gALG_aewbObj.AE_InArgs.curAe, &gALG_aewbObj.AE_OutArgs.nextAe, NUM_STEPS-1, (aewbFrames % NUM_STEPS));
     }
 
     /* remove the count and put it into the process */
@@ -1351,13 +1800,13 @@ void TI2A_applySettings(IAEWB_Ae *curAe, IAEWB_Ae *nextAe, int numSmoothSteps, i
 
   if(step >= numSmoothSteps) {
     sensorGain = nextAe->sensorGain;
-	sensorExposure = nextAe->exposureTime;
+    sensorExposure = nextAe->exposureTime;
     ipipe_awb_gain.dGain = nextAe->ipipeGain>> 2;
   }
 
   if (strcmp(DRV_imgsGetImagerName(), "OMNIVISION_OV271X_1080P") == 0)
   {
-	  sensorGain = OV271X_gain;
+      sensorGain = OV271X_gain;
   }
 
   ipipe_awb_gain.hGain_minmax = HISTgain_minmax;
@@ -1504,8 +1953,7 @@ int ALG_aewbRun(void *hndl, ALG_AewbRunPrm *prm, ALG_AewbStatus *status)
         TI2AFunc( (void *)prm->h3aDataVirtAddr );
     }
     else if(prm->aewbVendor == ALG_AEWB_ID_SIG) {
-        TI2AFunc( (void *)prm->h3aDataVirtAddr );
-        //SIG2AFunc( (void *)prm->h3aDataVirtAddr );
+        SIG2AFunc( (void *)prm->h3aDataVirtAddr );
     }
     return 0;
 }
