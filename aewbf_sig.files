@@ -3,7 +3,7 @@ include/ti/xdais/ialg.h
 include/ti/xdais/xdas.h
 include/xdc/std.h
 include/ae_sig.h
-include/alg_aewb_priv.h
+include/alg_aewbf.h
 include/iae_sig.h
 include/iaewb_sig.h
 include/iawb_sig.h

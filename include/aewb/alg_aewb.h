@@ -120,6 +120,7 @@ typedef struct {
     Uint32 hsz;             //Size on BoxCar Histogram
     Uint32 hist[ALG_SENSOR_BITS];     //Histogram of BoxCar image
     Uint16 *box;            //Pointer to BoxCar image
+    Uint32 th;              //Threshold for histogram max and min
 } ALG_aewbf_stat;
 
 /* ANR - IT */

@@ -3,6 +3,7 @@
 #include "imageTunePriv.h"
 #include <drv_capture.h>
 #include <drv_display.h>
+#include "alg_aewbf.h"
 
 #define ALG_AEWB_DEBUG
 
@@ -78,6 +79,66 @@ short ALG_aewbSetSensorExposure(int shutter)
   return 0;
 }
 
+short ALG_aewbSetDayNight(ALG_aewbf_stat *sig_stat, int lowlight)
+{
+    DRV_IpipeWb ipipeWb;
+    static AWB_PARAM PreAwb_Data;
+    static int darkframe = 0;
+    static int frame_cnt = 0;
+    static int frame_cnt_ircut = 0;
+    extern int gDayNight;
+
+    if (lowlight) {
+        if ((sig_stat->Y < 150) && gDayNight) { // Open IRCut if too dark
+            frame_cnt++;
+            if (frame_cnt >= 150) {
+                gDayNight = 0; // Night
+                ALG_aewbSetNDShutterOnOff(gDayNight);
+                frame_cnt = 0;
+            }
+        } else {
+            frame_cnt = 0;
+        }
+    }
+
+    if (gDayNight == 0) {
+        if (sig_stat->Y > 240) {  // Close IRCut
+            frame_cnt_ircut++;
+            if (frame_cnt_ircut >= 150){
+                gDayNight = 1; // Day
+                ALG_aewbSetNDShutterOnOff(gDayNight);
+                frame_cnt_ircut = 0;
+            }
+        }
+    }
+
+    // Go to low FPS mode if 150 frames dark
+    if (!lowlight) {
+        if (sig_stat->Y < 130) {
+            darkframe++;
+            if (darkframe > 150) {
+                DRV_imgsSetAEPriority(1);
+                darkframe = 0;
+            }
+        } else {
+            darkframe = 0;
+        }
+    }
+
+    // Go to High FPS mode if 60 frames light
+    if (lowlight) {
+        if (sig_stat->Y > 150) {
+            darkframe++;
+            if (darkframe > 60) {
+                DRV_imgsSetAEPriority(0);
+                darkframe = 0;
+            }
+        } else {
+            darkframe = 0;
+        }
+    }
+}
+
 short ALG_aewbSetIpipeWb(AWB_PARAM  *pAwb_Data, int DGainEnable, int lowlight)
 {
     DRV_IpipeWb ipipeWb;
@@ -91,292 +152,304 @@ short ALG_aewbSetIpipeWb(AWB_PARAM  *pAwb_Data, int DGainEnable, int lowlight)
 
     if (lowlight)
     {
-	if (strcmp(DRV_imgsGetImagerName(), "OMNIVISION_OV271X_1080P") == 0)
-	{
-	    if ((DRV_imgsReadReg(0x5690) < 0x10) && gDayNight)
-	    {
-		frame_cnt++;
-		if (frame_cnt >= 150)
-		{
-		    gDayNight = 0; // Night
-		    ALG_aewbSetNDShutterOnOff(gDayNight);
-		    DRV_imgsSetND(gDayNight);
-		    frame_cnt = 0;
-		}
-	    } else
-	    {
-		frame_cnt = 0;
-	    }
-	} else if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9P031_5MP") == 0)
-	{
+    if (strcmp(DRV_imgsGetImagerName(), "OMNIVISION_OV271X_1080P") == 0)
+    {
+        if ((DRV_imgsReadReg(0x5690) < 0x10) && gDayNight)
+        {
+        frame_cnt++;
+        if (frame_cnt >= 150)
+        {
+            gDayNight = 0; // Night
+            ALG_aewbSetNDShutterOnOff(gDayNight);
+            DRV_imgsSetND(gDayNight);
+            frame_cnt = 0;
+        }
+        } else
+        {
+        frame_cnt = 0;
+        }
+    } else if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9P031_5MP") == 0)
+    {
         if ((pAwb_Data->hGain_mid >= 3000) && gDayNight) // Open IRCut if too dark
-	    {
-		frame_cnt++;
-		if (frame_cnt >= 150)
-		{
-		    gDayNight = 0; // Night
-		    ALG_aewbSetNDShutterOnOff(gDayNight);
-		    frame_cnt = 0;
-		}
-	    } else
-	    {
-		frame_cnt = 0;
-	    }
-	} else
-	{
-	    if ((pAwb_Data->hGain_mid >= 3000) && gDayNight) // Open IRCut if too dark
-	    {
-		frame_cnt++;
-		if (frame_cnt >= 150)
-		{
-		    gDayNight = 0; // Night
-		    ALG_aewbSetNDShutterOnOff(gDayNight);
-		    frame_cnt = 0;
-		}
-	    } else
-	    {
-		frame_cnt = 0;
-	    }
-	}
+        {
+        frame_cnt++;
+        if (frame_cnt >= 150)
+        {
+            gDayNight = 0; // Night
+            ALG_aewbSetNDShutterOnOff(gDayNight);
+            frame_cnt = 0;
+        }
+        } else
+        {
+        frame_cnt = 0;
+        }
+    } else
+    {
+        if ((pAwb_Data->hGain_mid >= 3000) && gDayNight) // Open IRCut if too dark
+        {
+        frame_cnt++;
+        if (frame_cnt >= 150)
+        {
+            gDayNight = 0; // Night
+            ALG_aewbSetNDShutterOnOff(gDayNight);
+            frame_cnt = 0;
+        }
+        } else
+        {
+        frame_cnt = 0;
+        }
+    }
     }
 
     if (gDayNight == 0)
     {
-	if (strcmp(DRV_imgsGetImagerName(), "OMNIVISION_OV271X_1080P") == 0)
-	{
-	    if ((DRV_imgsReadReg(0x350A) == 0) && (DRV_imgsReadReg(0x350B) < 0x18)) // low light, medium gain
-	    {
-		frame_cnt_ircut++;
-		if (frame_cnt_ircut >= 60)
-		{
-		    gDayNight = 1; // Day
-		    ALG_aewbSetNDShutterOnOff(gDayNight);
-		    DRV_imgsSetND(gDayNight);
-		    frame_cnt_ircut = 0;
-		}
-	    } else
-	    {
-		frame_cnt_ircut = 0;
-	    }
-	} else if ((strcmp(DRV_imgsGetImagerName(), "MICRON_MT9P031_5MP") == 0) ||
-		   (strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP"   ) == 0))
-	{
-	    if ((pAwb_Data->dGain <= 256))  // Close IRCut
-	    {
-		frame_cnt_ircut++;
-		if (frame_cnt_ircut >= 30)
-		{
-		    gDayNight = 1; // Day
-		    ALG_aewbSetNDShutterOnOff(gDayNight);
-		    frame_cnt_ircut = 0;
-		}
-	    }
-	} else
-	{
-	    if ((sensor_exposure < 43000))  // Close IRCut
-	    {
-		frame_cnt_ircut++;
-		if (frame_cnt_ircut >= 3)
-		{
-		    gDayNight = 1; // Day
-		    ALG_aewbSetNDShutterOnOff(gDayNight);
-		    frame_cnt_ircut = 0;
-		}
-	    }
-	}
+    if (strcmp(DRV_imgsGetImagerName(), "OMNIVISION_OV271X_1080P") == 0)
+    {
+        if ((DRV_imgsReadReg(0x350A) == 0) && (DRV_imgsReadReg(0x350B) < 0x18)) // low light, medium gain
+        {
+        frame_cnt_ircut++;
+        if (frame_cnt_ircut >= 60)
+        {
+            gDayNight = 1; // Day
+            ALG_aewbSetNDShutterOnOff(gDayNight);
+            DRV_imgsSetND(gDayNight);
+            frame_cnt_ircut = 0;
+        }
+        } else
+        {
+        frame_cnt_ircut = 0;
+        }
+    } else if ((strcmp(DRV_imgsGetImagerName(), "MICRON_MT9P031_5MP") == 0) ||
+           (strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP"   ) == 0))
+    {
+        if ((pAwb_Data->dGain <= 256))  // Close IRCut
+        {
+        frame_cnt_ircut++;
+        if (frame_cnt_ircut >= 30)
+        {
+            gDayNight = 1; // Day
+            ALG_aewbSetNDShutterOnOff(gDayNight);
+            frame_cnt_ircut = 0;
+        }
+        }
+    } else
+    {
+        if ((sensor_exposure < 43000))  // Close IRCut
+        {
+        frame_cnt_ircut++;
+        if (frame_cnt_ircut >= 3)
+        {
+            gDayNight = 1; // Day
+            ALG_aewbSetNDShutterOnOff(gDayNight);
+            frame_cnt_ircut = 0;
+        }
+        }
+    }
     }
 
     // Disable ISIF digital gain
     if (DGainEnable != 1)
-	pAwb_Data->dGain = 256;
+    pAwb_Data->dGain = 256;
 
     if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0)
     {
-	if (pAwb_Data->dGain < 128)
-	{
-	    pAwb_Data->dGain = 128;
-	}
+    if (pAwb_Data->dGain < 128)
+    {
+        pAwb_Data->dGain = 128;
+    }
     }
     else
     {
-	if (pAwb_Data->dGain < 256)
-	{
-	    pAwb_Data->dGain = 256;
-	}
+    if (pAwb_Data->dGain < 256)
+    {
+        pAwb_Data->dGain = 256;
+    }
     }
 
     // Go to low FPS mode if 150 frames dark
     if (!lowlight)
     {
-	if (strcmp(DRV_imgsGetImagerName(), "OMNIVISION_OV271X_1080P") == 0)
-	{
-	    if (DRV_imgsReadReg(0x5690) < 0x1C)
-	    {
-		darkframe++;
-		if (darkframe > 150)
-		{
-		    DRV_imgsSetAEPriority(1);
-		    darkframe = 0;
-		}
-	    } else
-	    {
-		darkframe = 0;
-	    }
-	} else if (pAwb_Data->hMode == 8)    // ALTM Enable
-	{
-	    if (pAwb_Data->dGain >= 512 && DRV_imgsReadReg(0x315E) < 0x40)
-	    {
-		darkframe++;
-		if (darkframe > 150)
-		{
-		    DRV_imgsSetAEPriority(1);
-		    darkframe = 0;
-		}
-	    } else
-	    {
-		darkframe = 0;
-	    }
-	} else if (strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0)
-	{
-	    if (pAwb_Data->hGain_mid >= 1023 && pAwb_Data->dGain >= 1023)
-	    {
-		darkframe++;
-		if (darkframe > 150)
-		{
-		    DRV_imgsSetAEPriority(1);
-		    darkframe = 0;
-		}
-	    } else
-	    {
-		darkframe = 0;
-	    }
-	} else
-	{
-	    if (pAwb_Data->hGain_mid >= 1023 && pAwb_Data->dGain >= 1535)
-	    {
-		darkframe++;
-		if (darkframe > 150)
-		{
-		    DRV_imgsSetAEPriority(1);
-		    darkframe = 0;
-		}
-	    } else
-	    {
-		darkframe = 0;
-	    }
-	}
+    if (strcmp(DRV_imgsGetImagerName(), "OMNIVISION_OV271X_1080P") == 0)
+    {
+        if (DRV_imgsReadReg(0x5690) < 0x1C)
+        {
+        darkframe++;
+        if (darkframe > 150)
+        {
+            DRV_imgsSetAEPriority(1);
+            darkframe = 0;
+        }
+        } else
+        {
+        darkframe = 0;
+        }
+    } else if (pAwb_Data->hMode == 8)    // ALTM Enable
+    {
+        if (pAwb_Data->dGain >= 512 && DRV_imgsReadReg(0x315E) < 0x40)
+        {
+        darkframe++;
+        if (darkframe > 150)
+        {
+            DRV_imgsSetAEPriority(1);
+            darkframe = 0;
+        }
+        } else
+        {
+        darkframe = 0;
+        }
+    } else if (strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0)
+    {
+        if (pAwb_Data->hGain_mid >= 1023 && pAwb_Data->dGain >= 1023)
+        {
+        darkframe++;
+        if (darkframe > 150)
+        {
+            DRV_imgsSetAEPriority(1);
+            darkframe = 0;
+        }
+        } else
+        {
+        darkframe = 0;
+        }
+    } else
+    {
+        if (pAwb_Data->hGain_mid >= 1023 && pAwb_Data->dGain >= 1535)
+        {
+        darkframe++;
+        if (darkframe > 150)
+        {
+            DRV_imgsSetAEPriority(1);
+            darkframe = 0;
+        }
+        } else
+        {
+        darkframe = 0;
+        }
+    }
     }
 
     // Go to High FPS mode if 60 frames light
     if (lowlight)
     {
-	if (strcmp(DRV_imgsGetImagerName(), "OMNIVISION_OV271X_1080P") == 0)
-	{
-	    if ((DRV_imgsReadReg(0x5690) > 0x2F) && (DRV_imgsReadReg(0x350B) < 0x20) && (gDayNight == 1))
-	    {
-		darkframe++;
-		if (darkframe > 60)
-		{
-		    DRV_imgsSetAEPriority(0);
-		    darkframe = 0;
-		}
-	    } else
-	    {
-		darkframe = 0;
-	    }
-	} else if (pAwb_Data->hMode == 8)    // ALTM Enable
-	{
-	    if (pAwb_Data->hGain_mid < 512)
-	    {
-		darkframe++;
-		if (darkframe > 60)
-		{
-		    DRV_imgsSetAEPriority(0);
-		    darkframe = 0;
-		}
-	    } else
-	    {
-		darkframe = 0;
-	    }
-	}
+    if (strcmp(DRV_imgsGetImagerName(), "OMNIVISION_OV271X_1080P") == 0)
+    {
+        if ((DRV_imgsReadReg(0x5690) > 0x2F) && (DRV_imgsReadReg(0x350B) < 0x20) && (gDayNight == 1))
+        {
+        darkframe++;
+        if (darkframe > 60)
+        {
+            DRV_imgsSetAEPriority(0);
+            darkframe = 0;
+        }
+        } else
+        {
+        darkframe = 0;
+        }
+    } else if (pAwb_Data->hMode == 8)    // ALTM Enable
+    {
+        if (pAwb_Data->hGain_mid < 512)
+        {
+        darkframe++;
+        if (darkframe > 60)
+        {
+            DRV_imgsSetAEPriority(0);
+            darkframe = 0;
+        }
+        } else
+        {
+        darkframe = 0;
+        }
+    }
     }
 
     if( memcmp( &PreAwb_Data, pAwb_Data, sizeof(AWB_PARAM))== 0 )
-	return 0;
+    return 0;
 
     PreAwb_Data = *pAwb_Data;
 
 #ifdef ALG_AEWB_DEBUG
     OSA_printf(" AEWB: R Gr Gb B = (%d, %d, %d, %d) DGAIN = %d HistGAIN_mid = %d HistGAIN_mm = %d HistMin = %d HMode = %d\n",
-	       pAwb_Data->rGain, pAwb_Data->grGain, pAwb_Data->gbGain, pAwb_Data->bGain, pAwb_Data->dGain, pAwb_Data->hGain_mid, pAwb_Data->hGain_minmax, pAwb_Data->hMin, pAwb_Data->hMode
-	      );
+           pAwb_Data->rGain, pAwb_Data->grGain, pAwb_Data->gbGain, pAwb_Data->bGain, pAwb_Data->dGain, pAwb_Data->hGain_mid, pAwb_Data->hGain_minmax, pAwb_Data->hMin, pAwb_Data->hMode
+          );
 #endif
 
     if (gALG_aewbObj.aewbVendor == ALG_AEWB_ID_TI)
     {
     ipipeWb.gainR  = pAwb_Data->rGain >> 1;
-	ipipeWb.gainGr = pAwb_Data->grGain >> 1;
-	ipipeWb.gainGb = pAwb_Data->gbGain >> 1;
-	ipipeWb.gainB  = pAwb_Data->bGain >> 1;
+    ipipeWb.gainGr = pAwb_Data->grGain >> 1;
+    ipipeWb.gainGb = pAwb_Data->gbGain >> 1;
+    ipipeWb.gainB  = pAwb_Data->bGain >> 1;
     } else
     {
-	DRV_imgsSetWB(4, pAwb_Data->rGain >> 3, pAwb_Data->bGain >> 3);
+    DRV_imgsSetWB(4, pAwb_Data->rGain >> 3, pAwb_Data->bGain >> 3);
 
-	if (lowlight)
-	{
-	    /*if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0)
-	    {
-		rgb2rgb_gain = (3*pAwb_Data->hGain_mid)/2;
-		ALTM_enable = 0;
-	    } else
-	    {
-		rgb2rgb_gain = 2*pAwb_Data->hGain_mid;
-	    }*/
+    if (lowlight)
+    {
+        /*if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0)
+        {
+        rgb2rgb_gain = (3*pAwb_Data->hGain_mid)/2;
+        ALTM_enable = 0;
+        } else
+        {
+        rgb2rgb_gain = 2*pAwb_Data->hGain_mid;
+        }*/
 
-	    rgb2rgb_gain = 0x400;
-	    ALTM_enable = 0;
+        rgb2rgb_gain = 0x400;
+        ALTM_enable = 0;
 
-	    ipipeWb.gainR  = 4*128;
-	    ipipeWb.gainGr = 4*128;
-	    ipipeWb.gainGb = 4*128;
-	    ipipeWb.gainB  = 4*128;
-	} else
-	{
-	    if (pAwb_Data->hMode == 8)     // ALTM Enable
-	    {
-		/*rgb2rgb_gain = pAwb_Data->hGain_mid + pAwb_Data->hGain_minmax;
+        ipipeWb.gainR  = 4*128;
+        ipipeWb.gainGr = 4*128;
+        ipipeWb.gainGb = 4*128;
+        ipipeWb.gainB  = 4*128;
+    } else
+    {
+        if (pAwb_Data->hMode == 8)     // ALTM Enable
+        {
+        /*rgb2rgb_gain = pAwb_Data->hGain_mid + pAwb_Data->hGain_minmax;
 
-		Y_offset = pAwb_Data->hMin/8;
-		if (Y_offset >= 126)
-		    Y_offset = 126;
-		DRV_ipipeSetYoffet(-Y_offset);*/
+        Y_offset = pAwb_Data->hMin/8;
+        if (Y_offset >= 126)
+            Y_offset = 126;
+        DRV_ipipeSetYoffet(-Y_offset);*/
 
-		rgb2rgb_gain = 0x400;
-		ALTM_enable = 1;
+        rgb2rgb_gain = 0x400;
+        ALTM_enable = 1;
 
-		if (pAwb_Data->dGain < 512)
-		{
-		    pAwb_Data->dGain = (pAwb_Data->dGain * 3) / 2;
-		}
-
-#ifdef ALG_AEWB_DEBUG
-		OSA_printf(" AEWB: ALTM hGain_mid = %d rgb2rgb_gain = %d Y_offset = %d\n", pAwb_Data->hGain_mid, rgb2rgb_gain, Y_offset);
-#endif
-	    } else
-	    {
-
-		rgb2rgb_gain = 0x400;
+        if (pAwb_Data->dGain < 512)
+        {
+            pAwb_Data->dGain = (pAwb_Data->dGain * 3) / 2;
+        }
 
 #ifdef ALG_AEWB_DEBUG
-		OSA_printf(" AEWB: Middle rgb2rgb_gain = %d Y_offset = %d\n", rgb2rgb_gain, Y_offset);
+        OSA_printf(" AEWB: ALTM hGain_mid = %d rgb2rgb_gain = %d Y_offset = %d\n", pAwb_Data->hGain_mid, rgb2rgb_gain, Y_offset);
 #endif
-	    }
+        } else
+        {
+        /*if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0)
+        {
+            rgb2rgb_gain = pAwb_Data->hGain_mid + (pAwb_Data->hGain_minmax / 3);
+        } else
+        {
+            rgb2rgb_gain = pAwb_Data->hGain_mid + pAwb_Data->hGain_minmax;
+        }
 
-	    ipipeWb.gainR  = 4*128;
-	    ipipeWb.gainGr = 4*128;
-	    ipipeWb.gainGb = 4*128;
-	    ipipeWb.gainB  = 4*128;
-	}
+        Y_offset = pAwb_Data->hMin/4;
+        if (Y_offset >= 126)
+            Y_offset = 126;
+        DRV_ipipeSetYoffet(-Y_offset);*/
+
+        rgb2rgb_gain = 0x400;
+
+#ifdef ALG_AEWB_DEBUG
+        OSA_printf(" AEWB: Middle rgb2rgb_gain = %d Y_offset = %d\n", rgb2rgb_gain, Y_offset);
+#endif
+        }
+
+        ipipeWb.gainR  = 4*128;
+        ipipeWb.gainGr = 4*128;
+        ipipeWb.gainGb = 4*128;
+        ipipeWb.gainB  = 4*128;
+    }
     }
 
     DRV_ipipeSetWb(&ipipeWb);
@@ -384,14 +457,14 @@ short ALG_aewbSetIpipeWb(AWB_PARAM  *pAwb_Data, int DGainEnable, int lowlight)
     dGain = pAwb_Data->dGain*2;
 
     if (gALG_aewbObj.vnfDemoCfg)
-	dGain = (512*8)-1;
+    dGain = (512*8)-1;
 
     if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9P031_5MP") == 0)
     {
-        //if (lowlight)
-            //DRV_isifSetDgain(dGain, OSA_min(4095, (dGain * pAwb_Data->rGain) / 1024), OSA_min(4095, (dGain * pAwb_Data->bGain) / 1024), dGain, 0);
-        //else
-            //DRV_isifSetDgain(dGain, dGain + ((pAwb_Data->rGain % 64) * dGain / 1024), dGain + ((pAwb_Data->bGain % 64) * dGain / 1024), dGain, 0);
+        if (lowlight)
+            DRV_isifSetDgain(dGain, OSA_min(4095, (dGain * pAwb_Data->rGain) / 1024), OSA_min(4095, (dGain * pAwb_Data->bGain) / 1024), dGain, 0);
+        else
+            DRV_isifSetDgain(dGain, dGain + ((pAwb_Data->rGain % 64) * dGain / 1024), dGain + ((pAwb_Data->bGain % 64) * dGain / 1024), dGain, 0);
     } else if (strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0)
     {
         if (pAwb_Data->rGain > pAwb_Data->bGain)
@@ -407,15 +480,14 @@ short ALG_aewbSetIpipeWb(AWB_PARAM  *pAwb_Data, int DGainEnable, int lowlight)
                 dGain = (4096 * 1024) / pAwb_Data->bGain;
             }
         }
-        //DRV_isifSetDgain(dGain, OSA_min(4095, (dGain * pAwb_Data->rGain) / 1024), OSA_min(4095, (dGain * pAwb_Data->bGain) / 1024), dGain, 0);
+        DRV_isifSetDgain(dGain, OSA_min(4095, (dGain * pAwb_Data->rGain) / 1024), OSA_min(4095, (dGain * pAwb_Data->bGain) / 1024), dGain, 0);
     } else
     {
-        //DRV_isifSetDgain(dGain, dGain, dGain, dGain, 0);
+        DRV_isifSetDgain(dGain, dGain, dGain, dGain, 0);
     }
 
     return 0;
 }
-
 
 short ALG_aewbSetIpipeWb2(AWB_PARAM  *pAwb_Data )
 {
