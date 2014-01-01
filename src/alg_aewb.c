@@ -26,6 +26,7 @@ extern AWB_OUTPUT_DATA      gOutAWBData;
 extern DRV_IpipeObj gDRV_ipipeObj;      //For boxcar
 extern CSL_IpipeObj gCSL_ipipeHndl;   //For gamma and rgb2rgb
 
+
 #define GIO_AUTO_IRIS	(83)
 
 #define FD_DEBUG_MSG
@@ -1116,7 +1117,7 @@ int ALG_GlobalToneMapping(ALG_aewbf_stat *stat)
     int w = gDRV_ipipeObj.boxcarInfo.width;
     int h = gDRV_ipipeObj.boxcarInfo.height;
     int sz = w*h, sz3 = sz*3, sz4 = sz*4;
-    Uint32 R, G, B, Y, Y1, GR, GB, Grad;
+    Uint32 R, G, B, Y, Y1, GR, GB, Grad, gain = 256;
     Uint16 *box = stat->box;
     Uint32 hsz = ALG_SENSOR_BITS, *hist = stat->hist;
     int sum, th = sz/100;
@@ -1124,46 +1125,66 @@ int ALG_GlobalToneMapping(ALG_aewbf_stat *stat)
     Uint32 tables[256];
     CSL_IpipeGammaConfig dataG;
     CSL_IpipeRgb2RgbConfig rgb2rgb;
+    DRV_IpipeWb ipipeWb;
+
 
     //Config gamma correction tables
     dataG.tableSize = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SIZE_256;
     dataG.tableSrc  = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SELECT_RAM;
-    dataG.bypassR = 0;
-    dataG.bypassG = 0;
-    dataG.bypassB = 0;
+    dataG.bypassR = 1;
+    dataG.bypassG = 1;
+    dataG.bypassB = 1;
     dataG.tableR = tables;
     dataG.tableG = tables;
     dataG.tableB = tables;
 
+    if(stat->max[0]) gain = (4096<<8)/stat->max[0];
+    gain  = gain > 2047 ? 2047 : gain;
+    OSA_printf("gain = %d\n", gain);
+
     //Config RGB2RGB matrix
-    rgb2rgb.matrix[0][0] = 256;
+    rgb2rgb.matrix[0][0] = gain;
     rgb2rgb.matrix[0][1] = 0;
     rgb2rgb.matrix[0][2] = 0;
 
     rgb2rgb.matrix[1][0] = 0;
-    rgb2rgb.matrix[1][1] = 256;
+    rgb2rgb.matrix[1][1] = gain;
     rgb2rgb.matrix[1][2] = 0;
 
     rgb2rgb.matrix[2][0] = 0;
     rgb2rgb.matrix[2][1] = 0;
-    rgb2rgb.matrix[2][2] = 256;
+    rgb2rgb.matrix[2][2] = gain;
 
     rgb2rgb.offset[0]    = 0;
     rgb2rgb.offset[1]    = 0;
     rgb2rgb.offset[2]    = 0;
 
-
     vl0 = 0;
     for(i=0; i < 256; i++){
-        vl1 = i<<4;
+        vl1 = i<<2;
         tables[i] = (vl0<<10) | (vl1 - vl0);
         vl0 = vl1;
     }
 
-    //Set up new RGB2RGB matrix and gamma tables
-    DRV_ipipeSetRgb2Rgb2(&rgb2rgb);
-    //CSL_ipipeSetRgb2Rgb2Config(&gCSL_drvIpipeObj, &dataRGB);
-    CSL_ipipeSetGammaConfig(&gCSL_ipipeHndl, &dataG);
+    ipipeWb.gainR  = 512;
+    ipipeWb.gainGr = 512;
+    ipipeWb.gainGb = 512;
+    ipipeWb.gainB  = 512;
+
+    //Setup ipipe wb gains
+    DRV_ipipeSetWb(&ipipeWb);
+
+    //Setup RGB2RGB matrix
+    if(DRV_ipipeSetRgb2Rgb(&rgb2rgb) != CSL_SOK)
+        OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
+    if(DRV_ipipeSetRgb2Rgb2(&rgb2rgb) != CSL_SOK)
+        OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
+    //if(CSL_ipipeSetRgb2Rgb2Config(&gCSL_ipipeHndl, &rgb2rgb) != CSL_SOK)
+    //    OSA_ERROR("Fail CSL_ipipeSetRgb2Rgb2Config!!!\n");
+
+    //Setup gamma tables
+    if(CSL_ipipeSetGammaConfig(&gCSL_ipipeHndl, &dataG) != CSL_SOK)
+        OSA_ERROR("Fail CSL_ipipeSetGammaConfig!!!\n");
 }
 
 static void GETTING_RGB_BLOCK_VALUE(unsigned short * BLOCK_DATA_ADDR,IAEWB_Rgb *rgbData, aewDataEntry *aew_data, int shift)
@@ -1817,7 +1838,7 @@ void SIG2AFunc(void *pAddr)
             /* calling awb only we AE has converged */
             gALG_aewbObj.AWB_InArgs.curWb = gALG_aewbObj.AE_InArgs.curWb;
             gALG_aewbObj.AWB_InArgs.curAe = gALG_aewbObj.AE_InArgs.curAe;
-
+            /*
             AWB_TI_AWB.process(
                         (IAWB_Handle)gALG_aewbObj.handle_awb,
                         &gALG_aewbObj.AWB_InArgs,
@@ -1838,13 +1859,14 @@ void SIG2AFunc(void *pAddr)
                             NULL
                             );
             }
+
             ipipe_awb_gain.rGain = gALG_aewbObj.AWB_OutArgs.nextWb.rGain;
             ipipe_awb_gain.grGain = gALG_aewbObj.AWB_OutArgs.nextWb.gGain;
             ipipe_awb_gain.gbGain = gALG_aewbObj.AWB_OutArgs.nextWb.gGain;
             ipipe_awb_gain.bGain = gALG_aewbObj.AWB_OutArgs.nextWb.bGain;
+            */
 
             /*
-
             for(i = 0; i < NUM_RGB2RGB_MATRIXES-1; i ++){
                 diff = gALG_aewbObj.AWB_OutArgs.nextWb.colorTemp - rgb_maxtrixes[i].color_temp;
                 next_diff = rgb_maxtrixes[i+1].color_temp - gALG_aewbObj.AWB_OutArgs.nextWb.colorTemp;
