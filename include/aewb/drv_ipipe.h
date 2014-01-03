@@ -243,7 +243,7 @@ int DRV_ipipeBscSetParams(void);
 int DRV_ipipeBscUpdateParams(DRV_IpipeBscConfig *pBscConfig);
 
 int DRV_ipipeSetWb(DRV_IpipeWb *wbData);
-
+int DRV_ipipeSetWbOffset(int offset);
 int DRV_ipipeSetContrastBrightness(Uint16 contrast, Uint16 brightness);
 
 int DRV_ipipeSetEdgeEnhance(CSL_IpipeEdgeEnhanceConfig *config);

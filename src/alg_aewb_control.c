@@ -523,9 +523,9 @@ short ALG_aewbSetSensorDcsub(int dcsub)
   if( prevValue == dcsub )
       return 0;
 
-  #ifdef ALG_AEWB_DEBUG
+  //#ifdef ALG_AEWB_DEBUG
   OSA_printf(" AEWB: Sensor DCSUB = %d\n", dcsub);
-  #endif
+  //#endif
 
   prevValue = dcsub;
 
