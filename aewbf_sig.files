@@ -2,12 +2,12 @@ include/ti/xdais/dm/xdm.h
 include/ti/xdais/ialg.h
 include/ti/xdais/xdas.h
 include/xdc/std.h
-include/ae_sig.h
+include/aewbf_sig.h
 include/alg_aewbf.h
-include/iae_sig.h
+include/iaewbf_sig.h
 include/iaewb_sig.h
 include/iawb_sig.h
-src/ae_sig.c
+src/aewbf_sig.c
 src/af_sig.c
 src/awb_sig.c
 INSTALL
@@ -81,4 +81,3 @@ include/aewb/alg_aewb.h
 include/aewb/alg_aewb_priv.h
 include/awb_sig.h
 copy
-include/af_sig.h

@@ -3,10 +3,8 @@ noinst_LTLIBRARIES = libaewbf.la
 
 libaewbf_la_SOURCES =
 libaewbf_la_SOURCES += alg_aewb_control.c
-libaewbf_la_SOURCES += ae_sig.c
+libaewbf_la_SOURCES += aewbf_sig.c
 libaewbf_la_SOURCES += alg_aewb.c
-libaewbf_la_SOURCES += af_sig.c
-libaewbf_la_SOURCES += awb_sig.c
 
 #libaewbfinclude_HEADERS =
 

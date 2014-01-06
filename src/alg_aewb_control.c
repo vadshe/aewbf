@@ -56,12 +56,9 @@ short ALG_aewbSetSensorExposure(int shutter)
   static int prevValue = -1;
   int shutter32;
 
-  if(prevValue==shutter)
-    return 0;
+  //if(prevValue==shutter)
+  //  return 0;
 
-  #ifdef ALG_AEWB_DEBUG
-  OSA_printf(" AEWB: Sensor Exposure = %d\n", shutter);
-  #endif
 
   prevValue = shutter;
 
@@ -72,24 +69,28 @@ short ALG_aewbSetSensorExposure(int shutter)
   /*else if(gALG_aewbObj.vnfDemoCfg)
     shutter32 = (shutter32*200)/ENABLE_COMPENSATION;*/
 
-  DRV_imgsSetEshutter(shutter32, 0);
+#ifdef ALG_AEWB_DEBUG
+  OSA_printf("ALG_aewbSetSensorExposure: Exposure = %d\n", shutter32);
+#endif
+   DRV_imgsSetEshutter(shutter32, 0);
 
   sensor_exposure = shutter32;
 
   return 0;
 }
 
-short ALG_aewbSetDayNight(ALG_aewbf_stat *sig_stat, int lowlight)
+short ALG_aewbSetDayNight(IALG_Handle handle, int lowlight)
 {
     DRV_IpipeWb ipipeWb;
     static AWB_PARAM PreAwb_Data;
+    IAEWBF_SIG_Obj *hn = (IAEWBF_SIG_Obj *)handle;
     static int darkframe = 0;
     static int frame_cnt = 0;
     static int frame_cnt_ircut = 0;
     extern int gDayNight;
 
     if (lowlight) {
-        if ((sig_stat->Y < 150) && gDayNight) { // Open IRCut if too dark
+        if ((hn->Y < 150) && gDayNight) { // Open IRCut if too dark
             frame_cnt++;
             if (frame_cnt >= 150) {
                 gDayNight = 0; // Night
@@ -102,7 +103,7 @@ short ALG_aewbSetDayNight(ALG_aewbf_stat *sig_stat, int lowlight)
     }
 
     if (gDayNight == 0) {
-        if (sig_stat->Y > 240) {  // Close IRCut
+        if (hn->Y > 240) {  // Close IRCut
             frame_cnt_ircut++;
             if (frame_cnt_ircut >= 150){
                 gDayNight = 1; // Day
@@ -114,7 +115,7 @@ short ALG_aewbSetDayNight(ALG_aewbf_stat *sig_stat, int lowlight)
 
     // Go to low FPS mode if 150 frames dark
     if (!lowlight) {
-        if (sig_stat->Y < 130) {
+        if (hn->Y < 130) {
             darkframe++;
             if (darkframe > 150) {
                 DRV_imgsSetAEPriority(1);
@@ -127,7 +128,7 @@ short ALG_aewbSetDayNight(ALG_aewbf_stat *sig_stat, int lowlight)
 
     // Go to High FPS mode if 60 frames light
     if (lowlight) {
-        if (sig_stat->Y > 150) {
+        if (hn->Y > 150) {
             darkframe++;
             if (darkframe > 60) {
                 DRV_imgsSetAEPriority(0);
@@ -609,7 +610,7 @@ short ALG_aewbSetNDShutterOnOff(int bIsDay)
         DRV_imgsNDShutter(0, 0);
     else if (gIRCut == ALG_IRCUT_CLOSE)
         DRV_imgsNDShutter(1, 0);
-
+/*
     if (gIRCut == ALG_IRCUT_AUTO)
         ALG_SetHighGain(!bIsDay);
 
@@ -617,7 +618,7 @@ short ALG_aewbSetNDShutterOnOff(int bIsDay)
     {
 	DRV_imgsSetWB(bIsDay, 0x20, 0x20);
     }
-
+*/
     return 0;
 }
 
@@ -931,12 +932,13 @@ short ALG_aewbSetSensor50_60Hz(int Is50Hz)
     return 0;
 
   #ifdef ALG_AEWB_DEBUG
-  OSA_printf(" AEWB: Sensor 50_60Hz = %d\n", Is50Hz);
+  OSA_printf(" ALG_aewbSetSensor50_60Hz: Sensor 50_60Hz = %d\n", Is50Hz);
   #endif
 
   prevValue = Is50Hz;
 
   DRV_imgsSet50_60Hz(Is50Hz);
+  OSA_printf(" ALG_aewbSetSensor50_60Hz: DRV_imgsSet50_60Hz\n");
 
   if( Is50Hz )
   {
@@ -944,6 +946,7 @@ short ALG_aewbSetSensor50_60Hz(int Is50Hz)
   }else{
       DRV_displaySetMode(DRV_DISPLAY_MODE_NTSC);
   }
+  OSA_printf(" ALG_aewbSetSensor50_60Hz: finish\n");
 
   return 0;
 }

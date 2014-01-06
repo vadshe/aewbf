@@ -108,19 +108,6 @@ typedef struct {
 
 } ALG_AfRunPrm;
 
-//Statistics from BoxCar image
-typedef struct {
-    Uint32 R, G, B;         //Avarage of R, G, B color
-    Uint32 Y;               //Avarage of Y
-    Uint32 GR, GB;          //Avarage of G-R and G-B
-    Uint32 min[2];          //min[0] minimum of histogram, min[1] the number of pixels below min[0]
-    Uint32 max[2];          //max[0] maximum of histogram, max[1] the number of pixels more than min[0]
-    Uint32 hsz;             //Size on BoxCar Histogram
-    Uint32 hist[4096];     //Histogram of BoxCar image
-    Uint16 *box;            //Pointer to BoxCar image
-    Uint32 th;              //Threshold for histogram max and min
-} ALG_aewbf_stat;
-
 /* ANR - IT */
 typedef struct {
 
