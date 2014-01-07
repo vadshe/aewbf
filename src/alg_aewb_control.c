@@ -68,10 +68,6 @@ short ALG_aewbSetSensorExposure(int shutter)
     shutter32 = (shutter32*100)/ENABLE_COMPENSATION;
   /*else if(gALG_aewbObj.vnfDemoCfg)
     shutter32 = (shutter32*200)/ENABLE_COMPENSATION;*/
-
-#ifdef ALG_AEWB_DEBUG
-  OSA_printf("ALG_aewbSetSensorExposure: Exposure = %d\n", shutter32);
-#endif
    DRV_imgsSetEshutter(shutter32, 0);
 
   sensor_exposure = shutter32;

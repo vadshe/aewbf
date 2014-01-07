@@ -247,7 +247,7 @@ static void ALG_SIG_config(IALG_Handle handle)
     DRV_ipipeSetWb(&ipipeWb);
 
     //Config sensor max expouse
-    ALG_aewbSetSensorExposure(hn->exposureTimeRange[0].max);
+    ALG_aewbSetSensorExposure(hn->expRange[0].max);
 
 }
 
@@ -309,7 +309,7 @@ int SIG_2A_config(void)
                 sensorExposureMax = 33333;
             }
         } else {
-            stepSize = 1000;
+            stepSize = 1;
         }
     } else if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9M034_720P") == 0) // MT9M034 sensor
     {
@@ -333,7 +333,7 @@ int SIG_2A_config(void)
             }
         } else
         {
-            stepSize = 1000;
+            stepSize = 1;
         }
     } else if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9P031_5MP") == 0) // MT9M031 sensor
     {
@@ -344,7 +344,7 @@ int SIG_2A_config(void)
             stepSize = 10000; 	// Exposure stepsize
             sensorExposureMax = 40000;
         } else {
-            stepSize = 1000;
+            stepSize = 100;
         }
     } else if (strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0) // IMX136 sensor
     {
@@ -355,7 +355,7 @@ int SIG_2A_config(void)
             stepSize = 10000; 	// Exposure stepsize
             sensorExposureMax = 40000;
         } else {
-            stepSize = 1000;
+            stepSize = 1;
         }
     } else if (strcmp(DRV_imgsGetImagerName(), "OMNIVISION_OV271X_1080P") == 0) // OV271X sensor
     {
@@ -377,25 +377,25 @@ int SIG_2A_config(void)
         }
     } else
     {
-        stepSize = 1000;
+        stepSize = 1;
     }
 
     DP.numRanges ++;
 
     if (HISTmode == 8) // ALTM enable
     {
-        DP.exposureTimeRange[i].min = 0x20*32;
-        DP.exposureTimeRange[i].max = sensorExposureMax;
+        DP.expRange[i].min = 0x20*32;
+        DP.expRange[i].max = sensorExposureMax;
     } else
     {
         if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0)
         {
-            DP.exposureTimeRange[i].min = 0x10*32;
+            DP.expRange[i].min = 0x10*32;
         } else
         {
-            DP.exposureTimeRange[i].min = stepSize;
+            DP.expRange[i].min = stepSize;
         }
-        DP.exposureTimeRange[i].max = sensorExposureMax;
+        DP.expRange[i].max = sensorExposureMax;
     }
 
     DP.sensorGainRange[i].min = 1000;
@@ -404,12 +404,15 @@ int SIG_2A_config(void)
     DP.ipipeGainRange[i].max = 8191;
     DP.isifGainRange[i].min = 0;
     DP.isifGainRange[i].max = 4095;
-    DP.exposureTimeStepSize = stepSize;
+    DP.YRange.min = 0;
+    DP.YRange.max = 0;
+    DP.maxDiffY = 5;    // Max differnce 5%
+    DP.expStep = stepSize;
     sensorExposure = sensorExposureMax;
 
 #ifdef FD_DEBUG_MSG
     OSA_printf("SIG_2A_config: exposureTimeStepSize = %d exposureTimeMin = %d exposureTimeMax = %d \n",
-               DP.exposureTimeStepSize, DP.exposureTimeRange[0].min, DP.exposureTimeRange[0].max);
+               DP.expStep, DP.expRange[0].min, DP.expRange[0].max);
     OSA_printf("SIG_2A_config: eipipeGainMax = %d ipipeGainMin = %d \n",
                DP.ipipeGainRange[0].min, DP.ipipeGainRange[0].max);
     OSA_printf("SIG_2A_config: isifGainMax = %d isifGainnMin = %d \n",
@@ -419,8 +422,8 @@ int SIG_2A_config(void)
     i++;
 
     DP.numRanges ++;
-    DP.exposureTimeRange[i].min = 0;
-    DP.exposureTimeRange[i].max = 0;
+    DP.expRange[i].min = 0;
+    DP.expRange[i].max = 0;
     DP.sensorGainRange[i].min = 1000;
 
     if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0)
@@ -463,8 +466,8 @@ int SIG_2A_config(void)
     DP.ipipeGainRange[i].max = 0;
     i++;
     DP.numRanges ++ ;
-    DP.exposureTimeRange[i].min = 0;
-    DP.exposureTimeRange[i].max = 0;
+    DP.expRange[i].min = 0;
+    DP.expRange[i].max = 0;
     DP.sensorGainRange[i].min = 0;
     DP.sensorGainRange[i].max = 0;
     DP.ipipeGainRange[i].min = 4;
@@ -483,19 +486,6 @@ int SIG_2A_config(void)
     else
         DP.ipipeGainRange[i].max = 6144;
 
-    if(gFlicker == VIDEO_NONE) // More sensitive then not use flicker control
-    {
-        DP.targetBrightnessRange.min = 38;
-        DP.targetBrightnessRange.max = 42;
-        DP.targetBrightness = 40;
-        DP.thrld = 4;
-    } else
-    {
-        DP.targetBrightnessRange.min = 33;
-        DP.targetBrightnessRange.max = 47;
-        DP.targetBrightness = 40;
-        DP.thrld = 14;
-    }
 
     /*
     memcpy((void *)&gSIG_Obj.AE_InArgs.statMat,
@@ -1153,7 +1143,6 @@ static void ALG_GlobalToneMapping(IALG_Handle handle)
 
     Uint32 tables[256];
     CSL_IpipeGammaConfig dataG;
-    CSL_IpipeRgb2RgbConfig rgb2rgb, rgb2rgb1;
     DRV_IpipeWb ipipeWb;
 
 
@@ -1167,41 +1156,6 @@ static void ALG_GlobalToneMapping(IALG_Handle handle)
     dataG.tableG = tables;
     dataG.tableB = tables;
 
-
-    //Config 1-st RGB2RGB matrix
-    rgb2rgb.matrix[0][0] = gain;
-    rgb2rgb.matrix[0][1] = 0;
-    rgb2rgb.matrix[0][2] = 0;
-
-    rgb2rgb.matrix[1][0] = 0;
-    rgb2rgb.matrix[1][1] = gain;
-    rgb2rgb.matrix[1][2] = 0;
-
-    rgb2rgb.matrix[2][0] = 0;
-    rgb2rgb.matrix[2][1] = 0;
-    rgb2rgb.matrix[2][2] = gain;
-
-    rgb2rgb.offset[0]    = 0;
-    rgb2rgb.offset[1]    = 0;
-    rgb2rgb.offset[2]    = 0;
-
-    //Config s-nd RGB2RGB matrix
-    rgb2rgb1.matrix[0][0] = 256;
-    rgb2rgb1.matrix[0][1] = 0;
-    rgb2rgb1.matrix[0][2] = 0;
-
-    rgb2rgb1.matrix[1][0] = 0;
-    rgb2rgb1.matrix[1][1] = 256;
-    rgb2rgb1.matrix[1][2] = 0;
-
-    rgb2rgb1.matrix[2][0] = 0;
-    rgb2rgb1.matrix[2][1] = 0;
-    rgb2rgb1.matrix[2][2] = 256;
-
-    rgb2rgb1.offset[0]    = 0;
-    rgb2rgb1.offset[1]    = 0;
-    rgb2rgb1.offset[2]    = 0;
-
     vl0 = 0;
     for(i=0; i < 256; i++){
         vl1 = i<<2;
@@ -1210,11 +1164,11 @@ static void ALG_GlobalToneMapping(IALG_Handle handle)
     }
 
     //Setup isif white balance gain
-    rgain = (hn->G<<9)/hn->R;
-    bgain = (hn->G<<9)/hn->B;
+    //rgain = (hn->G<<9)/hn->R;
+    //bgain = (hn->G<<9)/hn->B;
 
-    DRV_isifSetDgain(512, 512, 512, 512, 0);
-    //DRV_isifSetDgain(512, bgain, rgain, 512, 0);
+    //DRV_isifSetDgain(512, 512, 512, 512, 0);
+    DRV_isifSetDgain(512, hn->Bgain, hn->Rgain, 512, 0);
 
     //Setup ipipe gains and offset
     offset = -(hn->min[0]*7>>3);
@@ -1222,7 +1176,7 @@ static void ALG_GlobalToneMapping(IALG_Handle handle)
     gain  = gain > 8190 ? 8190 : gain;
 
 #ifdef ALG_AEWB_DEBUG
-    OSA_printf("ALG_GlobalToneMapping : gain = %d offset = %d rgain = %d bgain = %d \n", gain, offset, rgain, bgain);
+    OSA_printf("ALG_GlobalToneMapping : gain = %d offset = %d  Rgain = %d Bgain = %d \n", gain, offset, hn->Rgain, hn->Bgain);
 #endif
     ipipeWb.gainR  = gain;
     ipipeWb.gainGr = gain;
@@ -1234,10 +1188,10 @@ static void ALG_GlobalToneMapping(IALG_Handle handle)
 
 
     //Setup RGB2RGB matrix
-    if(DRV_ipipeSetRgb2Rgb(&rgb2rgb1) != CSL_SOK)
-        OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
-    if(DRV_ipipeSetRgb2Rgb2(&rgb2rgb1) != CSL_SOK)
-        OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
+    //if(DRV_ipipeSetRgb2Rgb(&rgb2rgb1) != CSL_SOK)
+        //OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
+    //if(DRV_ipipeSetRgb2Rgb2(&rgb2rgb1) != CSL_SOK)
+        //OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
     //if(CSL_ipipeSetRgb2Rgb2Config(&gCSL_ipipeHndl, &rgb2rgb) != CSL_SOK)
     //    OSA_ERROR("Fail CSL_ipipeSetRgb2Rgb2Config!!!\n");
 
@@ -1884,7 +1838,7 @@ void SIG2AFunc(void *pAddr)
 //        OSA_printf("aew_enable = %d AEW_ENABLE = %d  aewbType = %d, ALG_AEWB_AE = %d ALG_AEWB_AEWB = %d aewbFrames = %d \n",
 //                   Aew_ext_parameter.aew_enable, AEW_ENABLE, gALG_aewbObj.aewbType, ALG_AEWB_AE, ALG_AEWB_AEWB, aewbFrames % NUM_STEPS);
 //#endif
-    if (Aew_ext_parameter.aew_enable == AEW_ENABLE && !(aewbFrames % NUM_STEPS) )
+    if (Aew_ext_parameter.aew_enable == AEW_ENABLE && !(aewbFrames % 1) )
     {
         gSIG_Obj.InArgs.curAe.exposureTime = sensorExposure;
         gSIG_Obj.InArgs.curAe.sensorGain = sensorGain;
