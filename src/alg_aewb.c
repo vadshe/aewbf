@@ -235,7 +235,11 @@ static void ALG_SIG_config(IALG_Handle handle)
 
 
     //Config isif white balance gain
-    DRV_isifSetDgain(512, 512, 512, 512, 0);
+    hn->Rgain = 512;
+    hn->Bgain = 512;
+    //DRV_isifSetDgain(512, 512, 512, 512, 0);
+    DRV_isifSetDgain(512, hn->Rgain, hn->Bgain, 512, 0);
+
 
     //Config ipipe gains and offset
     ipipeWb.gainR  = 512;
@@ -251,8 +255,9 @@ static void ALG_SIG_config(IALG_Handle handle)
 
 }
 
-int SIG_2A_config(void)
+int SIG_2A_config(IALG_Handle handle)
 {
+    IAEWBF_SIG_Obj *hn = (IAEWBF_SIG_Obj *)handle;
     IAEWBF_DynamicParams DP;
     int i, stepSize;
     int retval;
@@ -409,6 +414,11 @@ int SIG_2A_config(void)
     DP.maxDiffY = 5;    // Max differnce 5%
     DP.expStep = stepSize;
     sensorExposure = sensorExposureMax;
+    hn->YRange.max = 0;
+    hn->YRange.min = 4095;
+    hn->GR = 0;
+    hn->GB = 0;
+
 
 #ifdef FD_DEBUG_MSG
     OSA_printf("SIG_2A_config: exposureTimeStepSize = %d exposureTimeMin = %d exposureTimeMax = %d \n",
@@ -797,7 +807,7 @@ void *ALG_aewbCreate(ALG_AewbCreate *create)
       }
 
         OSA_printf("ALG_aewbCreate: SIG_2A_config\n");
-      retval = SIG_2A_config();
+      retval = SIG_2A_config(gSIG_Obj.handle_aewbf);
       if(retval == -1) {
           OSA_ERROR("ERROR: SIG_2A_config\n");
           return NULL;
@@ -1168,7 +1178,8 @@ static void ALG_GlobalToneMapping(IALG_Handle handle)
     //bgain = (hn->G<<9)/hn->B;
 
     //DRV_isifSetDgain(512, 512, 512, 512, 0);
-    DRV_isifSetDgain(512, hn->Bgain, hn->Rgain, 512, 0);
+    DRV_isifSetDgain(512 , hn->Rgain, hn->Bgain,  512, 0);
+    //DRV_isifSetDgain(512 , 150, 300, 512, 0);
 
     //Setup ipipe gains and offset
     offset = -(hn->min[0]*7>>3);
@@ -1838,7 +1849,7 @@ void SIG2AFunc(void *pAddr)
 //        OSA_printf("aew_enable = %d AEW_ENABLE = %d  aewbType = %d, ALG_AEWB_AE = %d ALG_AEWB_AEWB = %d aewbFrames = %d \n",
 //                   Aew_ext_parameter.aew_enable, AEW_ENABLE, gALG_aewbObj.aewbType, ALG_AEWB_AE, ALG_AEWB_AEWB, aewbFrames % NUM_STEPS);
 //#endif
-    if (Aew_ext_parameter.aew_enable == AEW_ENABLE && !(aewbFrames % 1) )
+    if (Aew_ext_parameter.aew_enable == AEW_ENABLE && !(aewbFrames % 5) )
     {
         gSIG_Obj.InArgs.curAe.exposureTime = sensorExposure;
         gSIG_Obj.InArgs.curAe.sensorGain = sensorGain;
