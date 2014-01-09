@@ -251,7 +251,7 @@ static void ALG_SIG_config(IALG_Handle handle)
     DRV_ipipeSetWb(&ipipeWb);
 
     //Config sensor max expouse
-    ALG_aewbSetSensorExposure(hn->expRange[0].max);
+    ALG_aewbSetSensorExposure(hn->ExpRange.max);
 
 }
 
@@ -349,7 +349,7 @@ int SIG_2A_config(IALG_Handle handle)
             stepSize = 10000; 	// Exposure stepsize
             sensorExposureMax = 40000;
         } else {
-            stepSize = 100;
+            stepSize = 500;
         }
     } else if (strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0) // IMX136 sensor
     {
@@ -360,7 +360,7 @@ int SIG_2A_config(IALG_Handle handle)
             stepSize = 10000; 	// Exposure stepsize
             sensorExposureMax = 40000;
         } else {
-            stepSize = 1;
+            stepSize = 500;
         }
     } else if (strcmp(DRV_imgsGetImagerName(), "OMNIVISION_OV271X_1080P") == 0) // OV271X sensor
     {
@@ -389,18 +389,18 @@ int SIG_2A_config(IALG_Handle handle)
 
     if (HISTmode == 8) // ALTM enable
     {
-        DP.expRange[i].min = 0x20*32;
-        DP.expRange[i].max = sensorExposureMax;
+        DP.ExpRange.min = 0x20*32;
+        DP.ExpRange.max = sensorExposureMax;
     } else
     {
         if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0)
         {
-            DP.expRange[i].min = 0x10*32;
+            DP.ExpRange.min = 0x10*32;
         } else
         {
-            DP.expRange[i].min = stepSize;
+            DP.ExpRange.min = stepSize;
         }
-        DP.expRange[i].max = sensorExposureMax;
+        DP.ExpRange.max = sensorExposureMax;
     }
 
     DP.sensorGainRange[i].min = 1000;
@@ -412,28 +412,22 @@ int SIG_2A_config(IALG_Handle handle)
     DP.YRange.min = 0;
     DP.YRange.max = 0;
     DP.maxDiffY = 5;    // Max differnce 5%
-    DP.expStep = stepSize;
+    //DP.ExpStep = stepSize;
+
     sensorExposure = sensorExposureMax;
+    hn->ExpStep = stepSize;
+    hn->Exp = sensorExposureMax;
+    hn->NewExp = sensorExposureMax;
     hn->YRange.max = 0;
     hn->YRange.min = 4095;
     hn->GR = 0;
     hn->GB = 0;
 
 
-#ifdef FD_DEBUG_MSG
-    OSA_printf("SIG_2A_config: exposureTimeStepSize = %d exposureTimeMin = %d exposureTimeMax = %d \n",
-               DP.expStep, DP.expRange[0].min, DP.expRange[0].max);
-    OSA_printf("SIG_2A_config: eipipeGainMax = %d ipipeGainMin = %d \n",
-               DP.ipipeGainRange[0].min, DP.ipipeGainRange[0].max);
-    OSA_printf("SIG_2A_config: isifGainMax = %d isifGainnMin = %d \n",
-               DP.isifGainRange[0].min, DP.isifGainRange[0].max);
-#endif
 
     i++;
 
     DP.numRanges ++;
-    DP.expRange[i].min = 0;
-    DP.expRange[i].max = 0;
     DP.sensorGainRange[i].min = 1000;
 
     if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0)
@@ -476,8 +470,6 @@ int SIG_2A_config(IALG_Handle handle)
     DP.ipipeGainRange[i].max = 0;
     i++;
     DP.numRanges ++ ;
-    DP.expRange[i].min = 0;
-    DP.expRange[i].max = 0;
     DP.sensorGainRange[i].min = 0;
     DP.sensorGainRange[i].max = 0;
     DP.ipipeGainRange[i].min = 4;
@@ -513,6 +505,15 @@ int SIG_2A_config(IALG_Handle handle)
     }
 
     ALG_SIG_config(gSIG_Obj.handle_aewbf);
+
+#ifdef FD_DEBUG_MSG
+    OSA_printf("SIG_2A_config: exposureTimeStepSize = %d exposureTimeMin = %d exposureTimeMax = %d \n",
+               DP.ExpStep, DP.ExpRange.min, DP.ExpRange.max);
+    OSA_printf("SIG_2A_config: eipipeGainMax = %d ipipeGainMin = %d \n",
+               DP.ipipeGainRange[0].min, DP.ipipeGainRange[0].max);
+    OSA_printf("SIG_2A_config: isifGainMax = %d isifGainnMin = %d \n",
+               DP.isifGainRange[0].min, DP.isifGainRange[0].max);
+#endif
 
     return 0;
 }
@@ -1142,7 +1143,7 @@ int Get_BoxCar(IALG_Handle handle)
     return OSA_SOK;
 }
 
-static void ALG_GlobalToneMapping(IALG_Handle handle)
+static void ALG_aewbfSet(IALG_Handle handle)
 {
     int i, vl0, vl1;
     IAEWBF_SIG_Obj *hn = (IAEWBF_SIG_Obj *)handle;
@@ -1155,6 +1156,11 @@ static void ALG_GlobalToneMapping(IALG_Handle handle)
     CSL_IpipeGammaConfig dataG;
     DRV_IpipeWb ipipeWb;
 
+    //Seting Expouse
+    if(hn->NewExp != hn->Exp) {
+        hn->Exp = hn->NewExp;
+        DRV_imgsSetEshutter(hn->Exp, 0);
+    }
 
     //Config gamma correction tables
     dataG.tableSize = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SIZE_256;
@@ -1162,16 +1168,12 @@ static void ALG_GlobalToneMapping(IALG_Handle handle)
     dataG.bypassR = 0;
     dataG.bypassG = 0;
     dataG.bypassB = 0;
-    dataG.tableR = tables;
-    dataG.tableG = tables;
-    dataG.tableB = tables;
-
-    vl0 = 0;
-    for(i=0; i < 256; i++){
-        vl1 = i<<2;
-        tables[i] = (vl0<<10) | (vl1 - vl0);
-        vl0 = vl1;
-    }
+    dataG.tableR = hn->lut;
+    dataG.tableG = hn->lut;
+    dataG.tableB = hn->lut;
+    //Setup gamma tables
+    if(CSL_ipipeSetGammaConfig(&gCSL_ipipeHndl, &dataG) != CSL_SOK)
+        OSA_ERROR("Fail CSL_ipipeSetGammaConfig!!!\n");
 
     //Setup isif white balance gain
     //rgain = (hn->G<<9)/hn->R;
@@ -1181,20 +1183,12 @@ static void ALG_GlobalToneMapping(IALG_Handle handle)
     DRV_isifSetDgain(512 , hn->Rgain, hn->Bgain,  512, 0);
     //DRV_isifSetDgain(512 , 150, 300, 512, 0);
 
-    //Setup ipipe gains and offset
-    offset = -(hn->min[0]*7>>3);
-    if(hn->max[0]) gain = (4096<<9)/(hn->max[0] + offset);
-    gain  = gain > 8190 ? 8190 : gain;
+    ipipeWb.gainR  = hn->Gain;
+    ipipeWb.gainGr = hn->Gain;
+    ipipeWb.gainGb = hn->Gain;
+    ipipeWb.gainB  = hn->Gain;
 
-#ifdef ALG_AEWB_DEBUG
-    OSA_printf("ALG_GlobalToneMapping : gain = %d offset = %d  Rgain = %d Bgain = %d \n", gain, offset, hn->Rgain, hn->Bgain);
-#endif
-    ipipeWb.gainR  = gain;
-    ipipeWb.gainGr = gain;
-    ipipeWb.gainGb = gain;
-    ipipeWb.gainB  = gain;
-
-    DRV_ipipeSetWbOffset(offset);
+    DRV_ipipeSetWbOffset(hn->Offset);
     DRV_ipipeSetWb(&ipipeWb);
 
 
@@ -1206,9 +1200,6 @@ static void ALG_GlobalToneMapping(IALG_Handle handle)
     //if(CSL_ipipeSetRgb2Rgb2Config(&gCSL_ipipeHndl, &rgb2rgb) != CSL_SOK)
     //    OSA_ERROR("Fail CSL_ipipeSetRgb2Rgb2Config!!!\n");
 
-    //Setup gamma tables
-    if(CSL_ipipeSetGammaConfig(&gCSL_ipipeHndl, &dataG) != CSL_SOK)
-        OSA_ERROR("Fail CSL_ipipeSetGammaConfig!!!\n");
 }
 
 static void GETTING_RGB_BLOCK_VALUE(unsigned short * BLOCK_DATA_ADDR,IAEWB_Rgb *rgbData, aewDataEntry *aew_data, int shift)
@@ -1775,46 +1766,13 @@ void TI2AFunc(void *pAddr)
 
 }
 
-void SIG2A_applySettings(IAEWBF_Ae *curAe, IAEWBF_Ae *nextAe, int numSmoothSteps, int step)
+void SIG2A_applySettings(void)
 {
-    //if (gALG_aewbObj.afEnable == 1)
-    //    return;
-
-    int delta_sensorgain = ((int)nextAe->sensorGain - (int)curAe->sensorGain)/numSmoothSteps;
-    int delta_exposure = ((int)nextAe->exposureTime - (int)curAe->exposureTime)/numSmoothSteps;
-    int delta_ipipe = ((int)nextAe->ipipeGain - (int)curAe->ipipeGain)/numSmoothSteps;
-
-    step ++;
-
-    sensorGain = delta_sensorgain * step + curAe->sensorGain;
-    sensorExposure = delta_exposure * step + curAe->exposureTime;
-    ipipe_awb_gain.dGain = (delta_ipipe * step +curAe->ipipeGain) >> 2;
-
-    if(step >= numSmoothSteps) {
-        sensorGain = nextAe->sensorGain;
-        sensorExposure = nextAe->exposureTime;
-        ipipe_awb_gain.dGain = nextAe->ipipeGain>> 2;
-    }
-
-    sensorGain = nextAe->sensorGain;
-    sensorExposure = nextAe->exposureTime;
-    ipipe_awb_gain.dGain = nextAe->ipipeGain>> 2;
-
-
-    ipipe_awb_gain.hGain_minmax = HISTgain_minmax;
-    ipipe_awb_gain.hGain_mid = HISTgain_mid;
-    ipipe_awb_gain.hMin = HISTmin;
-    ipipe_awb_gain.hMode = HISTmode;
-
-#ifdef ALG_AEWB_DEBUG
-    OSA_printf("SIG2A_applySettings : sensorExposure = %d numSmoothSteps = %d step = %d\n",sensorExposure, numSmoothSteps, step);
-#endif
-
     //ALG_aewbSetIpipeWb(&ipipe_awb_gain, gALG_aewbObj.DGainEnable, lowlight);
     ALG_aewbSetDayNight(gSIG_Obj.handle_aewbf, lowlight);
     //ALG_aewbSetSensorDcsub(0);
     ALG_aewbSetSensorExposure(sensorExposure);
-    ALG_GlobalToneMapping(gSIG_Obj.handle_aewbf);
+    ALG_aewbfSet(gSIG_Obj.handle_aewbf);
     //if (gALG_aewbObj.AGainEnable)
     //{
     //ALG_aewbSetSensorGain(sensorGain);
@@ -1823,34 +1781,10 @@ void SIG2A_applySettings(IAEWBF_Ae *curAe, IAEWBF_Ae *nextAe, int numSmoothSteps
 
 void SIG2AFunc(void *pAddr)
 {
-    int i = 0, retval = OSA_SOK ;
-    CONTROL3AS TI_Control3A;
-    int rgbMatrixIndex = 0;
-    int diff, next_diff;
-    float FD_brightness_cur;
-    float FD_brightness_next;
-    int AE_customdata;
-    Uint16 *box;
 
     Get_BoxCar(gSIG_Obj.handle_aewbf);
 
-    //GETTING_RGB_BLOCK_VALUE(pAddr, rgbData, aew_data, 2);
-
-    /* Xiangdong: we need a flag from the tuning serser to signal to the AWB thread that a new set of
-     calibration data has been created by the tuning tool and need to be used,
-     the following code needs to be enabled for to pass new tuning data in */
-    /*
-    if (IMAGE_TUNE_CmdGetAwbPrmStatus(&i) ){
-        retval = IMAGE_TUNE_GetAwbParams(&awb_calc_data);
-        retval = AWB_TI_AWB.control((IAWB_Handle)gALG_aewbObj.handle_awb, TIAWB_CMD_CALIBRATION, &awb_calc_data, NULL);
-        IMAGE_TUNE_CmdSetAwbPrmStatus(0); //reset flag
-    }*/
-//#ifdef ALG_AEWB_DEBUG
-//        OSA_printf("aew_enable = %d AEW_ENABLE = %d  aewbType = %d, ALG_AEWB_AE = %d ALG_AEWB_AEWB = %d aewbFrames = %d \n",
-//                   Aew_ext_parameter.aew_enable, AEW_ENABLE, gALG_aewbObj.aewbType, ALG_AEWB_AE, ALG_AEWB_AEWB, aewbFrames % NUM_STEPS);
-//#endif
-    if (Aew_ext_parameter.aew_enable == AEW_ENABLE && !(aewbFrames % 5) )
-    {
+    if ((Aew_ext_parameter.aew_enable == AEW_ENABLE) ) {
         gSIG_Obj.InArgs.curAe.exposureTime = sensorExposure;
         gSIG_Obj.InArgs.curAe.sensorGain = sensorGain;
         gSIG_Obj.InArgs.curAe.ipipeGain = ipipe_awb_gain.dGain << 2;
@@ -1867,95 +1801,10 @@ void SIG2AFunc(void *pAddr)
             gSIG_Obj.OutArgs.nextAe = gSIG_Obj.InArgs.curAe;
         }
 
-        /*
-        FD_brightness_cur = ((float)gALG_aewbObj.AE_InArgs.curAe.exposureTime) * gALG_aewbObj.AE_InArgs.curAe.sensorGain * gALG_aewbObj.AE_InArgs.curAe.ipipeGain;
-        FD_brightness_next = ((float)gALG_aewbObj.AE_OutArgs.nextAe.exposureTime) * gALG_aewbObj.AE_OutArgs.nextAe.sensorGain * gALG_aewbObj.AE_OutArgs.nextAe.ipipeGain;
+        SIG2A_applySettings();
 
-        /// Trigger Flicker detection process based on brightness threshold being crossed
-        if(FD_brightness_next < FD_BRIGHTNESS_THRESHHOLD && FD_brightness_cur >= FD_BRIGHTNESS_THRESHHOLD)
-        {
-            flicker_detect_complete =0;
-        }
-
-        if(FD_brightness_next > FD_BRIGHTNESS_THRESHHOLD && FD_brightness_cur <= FD_BRIGHTNESS_THRESHHOLD)
-        {
-            SIG_2A_config(1, gALG_aewbObj.saldre);
-        }
-        */
-        if(gSIG_Obj.OutArgs.nextAe.exposureTime == gSIG_Obj.InArgs.curAe.exposureTime &&
-                gSIG_Obj.OutArgs.nextAe.sensorGain == gSIG_Obj.InArgs.curAe.sensorGain &&
-                (gSIG_Obj.aewbType == ALG_AEWB_AWB || gSIG_Obj.aewbType == ALG_AEWB_AEWB) ||
-                (strcmp(DRV_imgsGetImagerName(), "OMNIVISION_OV271X_1080P") == 0))
-            //   gALG_aewbfObj.AE_OutArgs.nextAe.ipipeGain == gALG_aewbfObj.AE_InArgs.curAe.ipipeGain)
-        {
-            /* calling awb only we AE has converged */
-            //gALG_aewbfObj.AWBS_InArgs.curWb = gALG_aewbfObj.AES_InArgs.curWb;
-            //gALG_aewbfObj.AWBS_InArgs.curAe = gALG_aewbfObj.AES_InArgs.curAe;
-            /*
-            AWB_TI_AWB.process(
-                        (IAWB_Handle)gALG_aewbObj.handle_awb,
-                        &gALG_aewbObj.AWB_InArgs,
-                        &gALG_aewbObj.AWB_OutArgs,
-                        rgbData,
-                        NULL
-                        );
-
-            if (gALG_aewbObj.aewbVendor == ALG_AEWB_ID_SIG)
-            {
-                // Sigrand AWB algorithm
-                AWB_Sigrand_process(
-                            (IAWB_Handle)gALG_aewbObj.handle_awb,
-                            &gALG_aewbObj.AWB_InArgs,
-                            &gALG_aewbObj.AWB_OutArgs,
-                            rgbData,
-                            gALG_aewbObj.weight,
-                            NULL
-                            );
-            }
-
-            ipipe_awb_gain.rGain = gALG_aewbObj.AWB_OutArgs.nextWb.rGain;
-            ipipe_awb_gain.grGain = gALG_aewbObj.AWB_OutArgs.nextWb.gGain;
-            ipipe_awb_gain.gbGain = gALG_aewbObj.AWB_OutArgs.nextWb.gGain;
-            ipipe_awb_gain.bGain = gALG_aewbObj.AWB_OutArgs.nextWb.bGain;
-            */
-
-            /*
-            for(i = 0; i < NUM_RGB2RGB_MATRIXES-1; i ++){
-                diff = gALG_aewbObj.AWB_OutArgs.nextWb.colorTemp - rgb_maxtrixes[i].color_temp;
-                next_diff = rgb_maxtrixes[i+1].color_temp - gALG_aewbObj.AWB_OutArgs.nextWb.colorTemp;
-                if((next_diff >= 0 && diff >= 0) || diff < 0){
-                    if(next_diff < diff) i++;
-                    break;
-                }
-            }
-
-            if (i >= NUM_RGB2RGB_MATRIXES) i = NUM_RGB2RGB_MATRIXES - 1;
-
-
-            rgbMatrixIndex = RGB2RGB_stab(i);
-
-            ALG_aewbSetRgb2Rgb(&rgb_maxtrixes[rgbMatrixIndex].rgb2rgbparam);
-            ALG_aewbSetRgb2Rgb2(&rgb_maxtrixes[rgbMatrixIndex].rgb2rgb2param);
-            */
-            //SIG2A_applySettings(&gALG_aewbObj.AE_InArgs.curAe,&gALG_aewbObj.AE_OutArgs.nextAe, NUM_STEPS-1, 0);
-            //#ifdef ALG_AEWB_DEBUG
-            //        OSA_printf("Inside WB\n");
-            //#endif
-
-        }
-        //AEW_SETUP_SIG( &TI_Control3A );
-        //#ifdef ALG_AEWB_DEBUG
-        //    OSA_printf("Inside AE\n");
-        //#endif
-        SIG2A_applySettings(&gSIG_Obj.InArgs.curAe, &gSIG_Obj.OutArgs.nextAe, NUM_STEPS-1, 0);
-
-    } else if(Aew_ext_parameter.aew_enable == AEW_ENABLE && (gSIG_Obj.aewbType == ALG_AEWB_AE || gSIG_Obj.aewbType == ALG_AEWB_AEWB)){
-        //SIG2A_applySettings(&gSIG_Obj.InArgs.curAe, &gSIG_Obj.OutArgs.nextAe, NUM_STEPS-1, (aewbFrames % NUM_STEPS));
     }
-
-    /* remove the count and put it into the process */
-    aewbFrames ++;
-
+    aewbFrames++;
 }
 
 void TI2A_applySettings(IAEWB_Ae *curAe, IAEWB_Ae *nextAe, int numSmoothSteps, int step)
