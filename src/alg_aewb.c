@@ -183,7 +183,7 @@ static void ALG_SIG_config(IALG_Handle handle)
     int i, vl0, vl1;
     IAEWBF_SIG_Obj *hn = (IAEWBF_SIG_Obj *)handle;
 
-    Uint32 tables[256];
+    Uint32 tables[512];
     CSL_IpipeGammaConfig dataG;
     CSL_IpipeRgb2RgbConfig rgb2rgb;
     DRV_IpipeWb ipipeWb;
@@ -196,7 +196,7 @@ static void ALG_SIG_config(IALG_Handle handle)
     //DRV_ipipeSetContrastBrightness(pParm->yuv_adj_ctr, 0x0);
 
     //Config gamma correction tables
-    dataG.tableSize = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SIZE_256;
+    dataG.tableSize = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SIZE_512;
     dataG.tableSrc  = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SELECT_RAM;
     dataG.bypassR = 0;
     dataG.bypassG = 0;
@@ -207,8 +207,8 @@ static void ALG_SIG_config(IALG_Handle handle)
 
     //Liner gamma tables
     vl0 = 0;
-    for(i=0; i < 256; i++){
-        vl1 = i<<2;
+    for(i=0; i < 512; i++){
+        vl1 = i<<1;
         tables[i] = (vl0<<10) | (vl1 - vl0);
         vl0 = vl1;
     }
@@ -242,10 +242,11 @@ static void ALG_SIG_config(IALG_Handle handle)
 
     //Config isif white balance gain
     //DRV_isifSetDgain(512, 512, 512, 512, 0);
-    DRV_isifSetDgain(512, hn->Rgain, hn->Bgain, 512, 0);
+    DRV_isifSetDgain(hn->Gain, hn->Rgain + hn->Gain, hn->Bgain + hn->Gain, hn->Gain, 0);
 
 
     //Config ipipe gains and offset
+    /*
     ipipeWb.gainR  = hn->Gain;
     ipipeWb.gainGr = hn->Gain;
     ipipeWb.gainGb = hn->Gain;
@@ -253,6 +254,7 @@ static void ALG_SIG_config(IALG_Handle handle)
 
     DRV_ipipeSetWbOffset(hn->Offset);
     DRV_ipipeSetWb(&ipipeWb);
+    */
 
 
 
@@ -419,7 +421,7 @@ int SIG_2A_config(IALG_Handle handle)
     //DP.ExpStep = stepSize;
 
     //sensorExposure = sensorExposureMax;
-    hn->Ythresh = 10; // Max differnce Y persent 5%
+    hn->Ydiff = 10; // Max differnce Y persent
     hn->ExpStep = stepSize;
     hn->Exp = sensorExposureMax;
     hn->NewExp = sensorExposureMax;
@@ -430,9 +432,11 @@ int SIG_2A_config(IALG_Handle handle)
     hn->Offset = 0;
     hn->Gain = 512;
     hn->Rgain = 512;
+    hn->Ggain = 512;
     hn->Bgain = 512;
     //For Aptina MT9P006 5 mpix
-    hn->Ymax = 3000>>3;
+    hn->HmaxTh = 4000>>3;
+    hn->HhalfTh = 100;
 
     i++;
 
@@ -1172,7 +1176,7 @@ static void ALG_aewbfSet(IALG_Handle handle)
     DRV_imgsSetEshutter(hn->Exp, 0);
 
     //Config gamma correction tables
-    dataG.tableSize = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SIZE_256;
+    dataG.tableSize = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SIZE_512;
     dataG.tableSrc  = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SELECT_RAM;
     dataG.bypassR = 0;
     dataG.bypassG = 0;
@@ -1842,7 +1846,7 @@ void SIG2A_applySettings(void)
     DRV_imgsSetEshutter(hn->Exp, 0);
 
     //Config gamma correction tables
-    dataG.tableSize = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SIZE_256;
+    dataG.tableSize = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SIZE_512;
     dataG.tableSrc  = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SELECT_RAM;
     dataG.bypassR = 0;
     dataG.bypassG = 0;
@@ -1859,7 +1863,7 @@ void SIG2A_applySettings(void)
     //bgain = (hn->G<<9)/hn->B;
 
     //DRV_isifSetDgain(512, 512, 512, 512, 0);
-    DRV_isifSetDgain(512 , hn->Rgain, hn->Bgain,  512, 0);
+    DRV_isifSetDgain(512 + hn->Ggain , hn->Rgain + hn->Ggain, hn->Bgain + hn->Ggain, 512 + hn->Ggain, 0);
     //DRV_isifSetDgain(512 , 150, 300, 512, 0);
 
     ipipeWb.gainR  = hn->Gain;
