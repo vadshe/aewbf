@@ -242,22 +242,18 @@ static void ALG_SIG_config(IALG_Handle handle)
 
     //Config isif white balance gain
     //DRV_isifSetDgain(512, 512, 512, 512, 0);
-    DRV_isifSetDgain(hn->Gain, hn->Rgain + hn->Gain, hn->Bgain + hn->Gain, hn->Gain, 0);
+    DRV_isifSetDgain(hn->RGBgain[1], hn->RGBgain[0], hn->RGBgain[2], hn->RGBgain[1], 0);
 
 
     //Config ipipe gains and offset
-    /*
-    ipipeWb.gainR  = hn->Gain;
-    ipipeWb.gainGr = hn->Gain;
-    ipipeWb.gainGb = hn->Gain;
-    ipipeWb.gainB  = hn->Gain;
 
-    DRV_ipipeSetWbOffset(hn->Offset);
+    ipipeWb.gainR  = 512;
+    ipipeWb.gainGr = 512;
+    ipipeWb.gainGb = 512;
+    ipipeWb.gainB  = 512;
+
+    DRV_ipipeSetWbOffset(0);
     DRV_ipipeSetWb(&ipipeWb);
-    */
-
-
-
 
 }
 
@@ -431,11 +427,12 @@ int SIG_2A_config(IALG_Handle handle)
     hn->GB = 0;
     hn->Offset = 0;
     hn->Gain = 512;
-    hn->Rgain = 512;
-    hn->Ggain = 512;
-    hn->Bgain = 512;
+    hn->RGBgain[0] = 512;
+    hn->RGBgain[1] = 512;
+    hn->RGBgain[2] = 512;
+    hn->maxi = 0;
     //For Aptina MT9P006 5 mpix
-    hn->HmaxTh = 4000>>3;
+    hn->HmaxTh = 4000;
     hn->HhalfTh = 100;
 
     i++;
@@ -1156,65 +1153,6 @@ int Get_BoxCar(IALG_Handle handle)
     return OSA_SOK;
 }
 
-static void ALG_aewbfSet(IALG_Handle handle)
-{
-    int i, vl0, vl1;
-    IAEWBF_SIG_Obj *hn = (IAEWBF_SIG_Obj *)handle;
-    int sz = hn->w*hn->h, sz3 = sz*3, sz4 = sz*4;
-    Uint32 hsz = ALG_SENSOR_BITS, *hist = hn->hist;
-    int sum, th = sz/100;
-    int gain = 256, rgain = 512, bgain = 512, offset = 0;
-
-    Uint32 tables[256];
-    CSL_IpipeGammaConfig dataG;
-    DRV_IpipeWb ipipeWb;
-
-    //Seting Expouse
-    if(hn->NewExp != hn->Exp) {
-        hn->Exp = hn->NewExp;
-    }
-    DRV_imgsSetEshutter(hn->Exp, 0);
-
-    //Config gamma correction tables
-    dataG.tableSize = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SIZE_512;
-    dataG.tableSrc  = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SELECT_RAM;
-    dataG.bypassR = 0;
-    dataG.bypassG = 0;
-    dataG.bypassB = 0;
-    dataG.tableR = hn->lut;
-    dataG.tableG = hn->lut;
-    dataG.tableB = hn->lut;
-    //Setup gamma tables
-    if(CSL_ipipeSetGammaConfig(&gCSL_ipipeHndl, &dataG) != CSL_SOK)
-        OSA_ERROR("Fail CSL_ipipeSetGammaConfig!!!\n");
-
-    //Setup isif white balance gain
-    //rgain = (hn->G<<9)/hn->R;
-    //bgain = (hn->G<<9)/hn->B;
-
-    //DRV_isifSetDgain(512, 512, 512, 512, 0);
-    DRV_isifSetDgain(512 , hn->Rgain, hn->Bgain,  512, 0);
-    //DRV_isifSetDgain(512 , 150, 300, 512, 0);
-
-    ipipeWb.gainR  = hn->Gain;
-    ipipeWb.gainGr = hn->Gain;
-    ipipeWb.gainGb = hn->Gain;
-    ipipeWb.gainB  = hn->Gain;
-
-    DRV_ipipeSetWbOffset(hn->Offset);
-    DRV_ipipeSetWb(&ipipeWb);
-
-
-    //Setup RGB2RGB matrix
-    //if(DRV_ipipeSetRgb2Rgb(&rgb2rgb1) != CSL_SOK)
-        //OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
-    //if(DRV_ipipeSetRgb2Rgb2(&rgb2rgb1) != CSL_SOK)
-        //OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
-    //if(CSL_ipipeSetRgb2Rgb2Config(&gCSL_ipipeHndl, &rgb2rgb) != CSL_SOK)
-    //    OSA_ERROR("Fail CSL_ipipeSetRgb2Rgb2Config!!!\n");
-
-}
-
 static void GETTING_RGB_BLOCK_VALUE(unsigned short * BLOCK_DATA_ADDR,IAEWB_Rgb *rgbData, aewDataEntry *aew_data, int shift)
 {
   unsigned short i,j,k, numWin, idx1, idx2;
@@ -1789,6 +1727,7 @@ void SIG2A_applySettings(void)
     static int frame_cnt = 0;
     static int frame_cnt_ircut = 0;
     extern int gDayNight;
+    int gain;
 
     //Setup day night mode
     if (lowlight) {
@@ -1863,15 +1802,21 @@ void SIG2A_applySettings(void)
     //bgain = (hn->G<<9)/hn->B;
 
     //DRV_isifSetDgain(512, 512, 512, 512, 0);
-    DRV_isifSetDgain(512 + hn->Ggain , hn->Rgain + hn->Ggain, hn->Bgain + hn->Ggain, 512 + hn->Ggain, 0);
+    gain = hn->Gain - hn->RGBgain[hn->maxi];
+    DRV_isifSetDgain(gain + hn->RGBgain[1] , gain + hn->RGBgain[0], gain + hn->RGBgain[2], gain + hn->RGBgain[1], 0);
     //DRV_isifSetDgain(512 , 150, 300, 512, 0);
-
+    /*
     ipipeWb.gainR  = hn->Gain;
     ipipeWb.gainGr = hn->Gain;
     ipipeWb.gainGb = hn->Gain;
     ipipeWb.gainB  = hn->Gain;
+    */
+    ipipeWb.gainR  = 512;
+    ipipeWb.gainGr = 512;
+    ipipeWb.gainGb = 512;
+    ipipeWb.gainB  = 512;
 
-    DRV_ipipeSetWbOffset(hn->Offset);
+    DRV_ipipeSetWbOffset(0);
     DRV_ipipeSetWb(&ipipeWb);
 
 
