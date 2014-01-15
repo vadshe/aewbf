@@ -189,7 +189,7 @@ static void ALG_SIG_config(IALG_Handle handle)
     DRV_IpipeWb ipipeWb;
 
     //Config Expouse
-    DRV_imgsSetEshutter(hn->ExpRange.max, 0);
+    DRV_imgsSetEshutter(hn->Exp.Range.max, 0);
 
     //Config contrast and Brightness
     //DRV_ipipeSetYoffet((pParm->yuv_adj_brt-128));
@@ -254,6 +254,9 @@ static void ALG_SIG_config(IALG_Handle handle)
 
     DRV_ipipeSetWbOffset(0);
     DRV_ipipeSetWb(&ipipeWb);
+
+    DRV_imgsSetAEPriority(0);
+    ALG_aewbSetNDShutterOnOff(0);
 
 }
 
@@ -351,7 +354,7 @@ int SIG_2A_config(IALG_Handle handle)
             stepSize = 10000; 	// Exposure stepsize
             sensorExposureMax = 40000;
         } else {
-            stepSize = 500;
+            stepSize = 1;
         }
     } else if (strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0) // IMX136 sensor
     {
@@ -362,7 +365,7 @@ int SIG_2A_config(IALG_Handle handle)
             stepSize = 10000; 	// Exposure stepsize
             sensorExposureMax = 40000;
         } else {
-            stepSize = 500;
+            stepSize = 1;
         }
     } else if (strcmp(DRV_imgsGetImagerName(), "OMNIVISION_OV271X_1080P") == 0) // OV271X sensor
     {
@@ -409,24 +412,41 @@ int SIG_2A_config(IALG_Handle handle)
     DP.sensorGainRange[i].max = 1000;
     DP.ipipeGainRange[i].min = 0;
     DP.ipipeGainRange[i].max = 8191;
-    DP.isifGainRange[i].min = 0;
-    DP.isifGainRange[i].max = 4095;
+    //DP.isifGainRange[i].min = 0;
+    //DP.isifGainRange[i].max = 4095;
     DP.YRange.min = 0;
     DP.YRange.max = 0;
     //DP.Ythresh = 10;
     //DP.ExpStep = stepSize;
 
-    //sensorExposure = sensorExposureMax;
+    //Exposure setup
+    hn->Exp.Step = stepSize;
+    hn->Exp.Old = sensorExposureMax;
+    hn->Exp.New = sensorExposureMax;
+    hn->Exp.Max = sensorExposureMax;
+    hn->Exp.Min = sensorExposureMax;
+    hn->Exp.Range.max = sensorExposureMax;
+    hn->Exp.Range.min = stepSize;
+    hn->Exp.Th = 10; //10%
+    hn->Exp.Diff = 0;
+
+    //ISIF gain setup
+    hn->Gain.Step = 16;
+    hn->Gain.New = 512;
+    hn->Gain.Old = 512;
+    hn->Gain.Max = 512;
+    hn->Gain.Min = 512;
+    hn->Gain.Range.min = 1;
+    hn->Gain.Range.max = 4095;
+    hn->Gain.Th = 10; //10%
+    hn->Gain.Diff = 0;
+
     hn->Ydiff = 10; // Max differnce Y persent
-    hn->ExpStep = stepSize;
-    hn->Exp = sensorExposureMax;
-    hn->NewExp = sensorExposureMax;
     hn->YRange.max = 0;
     hn->YRange.min = 4095;
     hn->GR = 0;
     hn->GB = 0;
     hn->Offset = 0;
-    hn->Gain = 512;
     hn->RGBgain[0] = 512;
     hn->RGBgain[1] = 512;
     hn->RGBgain[2] = 512;
@@ -434,6 +454,7 @@ int SIG_2A_config(IALG_Handle handle)
     //For Aptina MT9P006 5 mpix
     hn->HmaxTh = 4000;
     hn->HhalfTh = 100;
+    hn->Hhalf = 0;
 
     i++;
 
@@ -516,14 +537,6 @@ int SIG_2A_config(IALG_Handle handle)
 
     ALG_SIG_config(gSIG_Obj.handle_aewbf);
 
-#ifdef FD_DEBUG_MSG
-    OSA_printf("SIG_2A_config: exposureTimeStepSize = %d exposureTimeMin = %d exposureTimeMax = %d \n",
-               DP.ExpStep, DP.ExpRange.min, DP.ExpRange.max);
-    OSA_printf("SIG_2A_config: eipipeGainMax = %d ipipeGainMin = %d \n",
-               DP.ipipeGainRange[0].min, DP.ipipeGainRange[0].max);
-    OSA_printf("SIG_2A_config: isifGainMax = %d isifGainnMin = %d \n",
-               DP.isifGainRange[0].min, DP.isifGainRange[0].max);
-#endif
 
     return 0;
 }
@@ -1728,7 +1741,7 @@ void SIG2A_applySettings(void)
     static int frame_cnt_ircut = 0;
     extern int gDayNight;
     int gain;
-
+    /*
     //Setup day night mode
     if (lowlight) {
         if ((hn->Y < 150) && gDayNight) { // Open IRCut if too dark
@@ -1777,12 +1790,31 @@ void SIG2A_applySettings(void)
             darkframe = 0;
         }
     }
+    */
+    //DRV_imgsSetAEPriority(0);
+    //ALG_aewbSetNDShutterOnOff(0);
 
     //Seting Expouse
-    if(hn->NewExp != hn->Exp) {
-        hn->Exp = hn->NewExp;
+    if(hn->Exp.New != hn->Exp.Old) {
+        hn->Exp.Old = hn->Exp.New;
     }
-    DRV_imgsSetEshutter(hn->Exp, 0);
+    DRV_imgsSetEshutter(hn->Exp.New, 0);
+
+    //ISIF gain seting
+    if(hn->Gain.New != hn->Gain.Old) {
+        hn->RGBgain[1] = hn->Gain.New;
+        hn->RGBgain[0] = hn->Gain.New*hn->RGBgain[0]/hn->Gain.Old;
+        hn->RGBgain[2] = hn->Gain.New*hn->RGBgain[2]/hn->Gain.Old;
+        hn->Gain.Old = hn->Gain.New;
+        //OSA_printf("SIG2A_applySettings: new = %d old = %d Rgain = %d Ggain = %d Bgain = %d\n",
+        //           hn->Gain.New, hn->Gain.Old, hn->RGBgain[0], hn->RGBgain[1], hn->RGBgain[2]);
+    }
+    //DRV_isifSetDgain(512, 512, 512, 512, 0);
+    //gain = hn->Gain.New - hn->RGBgain[hn->maxi];
+    //DRV_isifSetDgain(gain + hn->RGBgain[1] , gain + hn->RGBgain[0], gain + hn->RGBgain[2], gain + hn->RGBgain[1], 0);
+    //gain = hn->Gain.New - hn->RGBgain[hn->maxi];
+    DRV_isifSetDgain(hn->RGBgain[1] , hn->RGBgain[0], hn->RGBgain[2], hn->RGBgain[1], 0);
+
 
     //Config gamma correction tables
     dataG.tableSize = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SIZE_512;
@@ -1801,10 +1833,6 @@ void SIG2A_applySettings(void)
     //rgain = (hn->G<<9)/hn->R;
     //bgain = (hn->G<<9)/hn->B;
 
-    //DRV_isifSetDgain(512, 512, 512, 512, 0);
-    gain = hn->Gain - hn->RGBgain[hn->maxi];
-    DRV_isifSetDgain(gain + hn->RGBgain[1] , gain + hn->RGBgain[0], gain + hn->RGBgain[2], gain + hn->RGBgain[1], 0);
-    //DRV_isifSetDgain(512 , 150, 300, 512, 0);
     /*
     ipipeWb.gainR  = hn->Gain;
     ipipeWb.gainGr = hn->Gain;
