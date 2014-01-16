@@ -255,8 +255,10 @@ static void ALG_SIG_config(IALG_Handle handle)
     DRV_ipipeSetWbOffset(0);
     DRV_ipipeSetWb(&ipipeWb);
 
-    DRV_imgsSetAEPriority(0);
-    ALG_aewbSetNDShutterOnOff(0);
+    //DRV_imgsSetAEPriority(0);
+    ALG_aewbSetNDShutterOnOff(1);
+    //ALG_aewbSetNDShutterOnOff(0);
+    //ALG_aewbSetNDShutterOnOff(1);
 
 }
 
@@ -1822,9 +1824,9 @@ void SIG2A_applySettings(void)
     dataG.bypassR = 0;
     dataG.bypassG = 0;
     dataG.bypassB = 0;
-    dataG.tableR = hn->lut;
-    dataG.tableG = hn->lut;
-    dataG.tableB = hn->lut;
+    dataG.tableR = hn->RGBh[0];
+    dataG.tableG = hn->RGBh[1];
+    dataG.tableB = hn->RGBh[2];
     //Setup gamma tables
     if(CSL_ipipeSetGammaConfig(&gCSL_ipipeHndl, &dataG) != CSL_SOK)
         OSA_ERROR("Fail CSL_ipipeSetGammaConfig!!!\n");
