@@ -190,6 +190,8 @@ static void ALG_SIG_config(IALG_Handle handle)
 
     //Config Expouse
     DRV_imgsSetEshutter(hn->Exp.Range.max, 0);
+    OSA_printf("ALG_SIG_config: hn->Exp.Range.max = %d\n", hn->Exp.Range.max);
+    ALG_aewbSetSensorDcsub(hn->Offset.New);
 
     //Config contrast and Brightness
     //DRV_ipipeSetYoffet((pParm->yuv_adj_brt-128));
@@ -256,7 +258,7 @@ static void ALG_SIG_config(IALG_Handle handle)
     DRV_ipipeSetWb(&ipipeWb);
 
     //DRV_imgsSetAEPriority(0);
-    ALG_aewbSetNDShutterOnOff(1);
+    //ALG_aewbSetNDShutterOnOff(1);
     //ALG_aewbSetNDShutterOnOff(0);
     //ALG_aewbSetNDShutterOnOff(1);
 
@@ -281,13 +283,10 @@ int SIG_2A_config(IALG_Handle handle)
         ALG_aewbSetSensor50_60Hz(0); // 30FPS
     }
 
-    OSA_printf("SIG_2A_config: ALG_aewbSetSensor50_60Hz\n");
-
     sensorGain = 1000;
     lowlight = DRV_imgsGetAEPriority();
 
     extern int gFlicker;
-    OSA_printf("SIG_2A_config: DRV_imgsGetAEPriority gFlicker = %d\n", gFlicker);
 
     if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0) 	// AR0331 sensor
     {
@@ -394,22 +393,6 @@ int SIG_2A_config(IALG_Handle handle)
 
     DP.numRanges ++;
 
-    if (HISTmode == 8) // ALTM enable
-    {
-        DP.ExpRange.min = 0x20*32;
-        DP.ExpRange.max = sensorExposureMax;
-    } else
-    {
-        if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0)
-        {
-            DP.ExpRange.min = 0x10*32;
-        } else
-        {
-            DP.ExpRange.min = stepSize;
-        }
-        DP.ExpRange.max = sensorExposureMax;
-    }
-
     DP.sensorGainRange[i].min = 1000;
     DP.sensorGainRange[i].max = 1000;
     DP.ipipeGainRange[i].min = 0;
@@ -443,94 +426,33 @@ int SIG_2A_config(IALG_Handle handle)
     hn->Gain.Th = 10; //10%
     hn->Gain.Diff = 0;
 
+    //ISIF offset setup
+    hn->Offset.Step = 1;
+    hn->Offset.New = 1;
+    hn->Offset.Old = 1;
+    hn->Offset.Max = 1;
+    hn->Offset.Min = 1;
+    hn->Offset.Range.min = 0;
+    hn->Offset.Range.max = 4095;
+    hn->Offset.Th = 10; //10%
+    hn->Offset.Diff = 0;
+
     hn->Ydiff = 10; // Max differnce Y persent
     hn->YRange.max = 0;
     hn->YRange.min = 4095;
     hn->GR = 0;
     hn->GB = 0;
-    hn->Offset = 0;
+    //hn->Offset = 0;
     hn->RGBgain[0] = 512;
     hn->RGBgain[1] = 512;
     hn->RGBgain[2] = 512;
     hn->maxi = 0;
     //For Aptina MT9P006 5 mpix
     hn->HmaxTh = 4000;
+    hn->HminTh = 0;
     hn->HhalfTh = 100;
     hn->Hhalf = 0;
 
-    i++;
-
-    DP.numRanges ++;
-    DP.sensorGainRange[i].min = 1000;
-
-    if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0)
-    {
-        if (HighGain)
-            DP.sensorGainRange[i].max = 5001;
-        else if (lowlight)
-            DP.sensorGainRange[i].max = 3001;
-        else
-            DP.sensorGainRange[i].max = 2001;
-    } else if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9P031_5MP") == 0)
-    {
-        extern int gIRCut, gBWMode;
-        if (HighGain)
-            DP.sensorGainRange[i].max = 2000;
-        else if (lowlight && (!gBWMode || gIRCut != 0))
-            DP.sensorGainRange[i].max = 2000;
-        else if (lowlight)
-            DP.sensorGainRange[i].max = 2000;
-        else
-            DP.sensorGainRange[i].max = 2000;
-    } else if (strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0)
-    {
-        if (HighGain)
-            DP.sensorGainRange[i].max = 100000; // logarithmic
-        else if (lowlight)
-            DP.sensorGainRange[i].max = 15800;
-        else
-            DP.sensorGainRange[i].max = 3000;
-    } else
-    {
-        if (HighGain)
-            DP.sensorGainRange[i].max = 2000;
-        else if (lowlight)
-            DP.sensorGainRange[i].max = 2000;
-        else
-            DP.sensorGainRange[i].max = 1500;
-    }
-    DP.ipipeGainRange[i].min = 0;
-    DP.ipipeGainRange[i].max = 0;
-    i++;
-    DP.numRanges ++ ;
-    DP.sensorGainRange[i].min = 0;
-    DP.sensorGainRange[i].max = 0;
-    DP.ipipeGainRange[i].min = 4;
-
-    if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9P031_5MP") == 0)
-    {
-        if (lowlight)
-            DP.ipipeGainRange[i].max = 4096;
-        else
-            DP.ipipeGainRange[i].max = 6144;
-    }
-    if (strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0)
-    {
-        DP.ipipeGainRange[i].max = 4096;
-    }
-    else
-        DP.ipipeGainRange[i].max = 6144;
-
-
-    /*
-    memcpy((void *)&gSIG_Obj.AE_InArgs.statMat,
-           (void *)&gSIG_Obj.IAEWB_StatMatdata,
-           sizeof(IAEWB_StatMat) );
-
-    memcpy( (void *)&gSIG_Obj.AWB_InArgs.statMat,
-            (void *)&gSIG_Obj.IAEWB_StatMatdata,
-            sizeof(IAEWB_StatMat) );
-    */
     retval = IAEWBF_SIG.control((IAEWBF_Handle)gSIG_Obj.handle_aewbf, IAEWBF_CMD_SET_CONFIG, &DP, NULL);
     if(retval == -1) {
         OSA_ERROR("IAEWBF_SIG.control\n");
@@ -538,7 +460,6 @@ int SIG_2A_config(IALG_Handle handle)
     }
 
     ALG_SIG_config(gSIG_Obj.handle_aewbf);
-
 
     return 0;
 }
@@ -816,14 +737,12 @@ void *ALG_aewbCreate(ALG_AewbCreate *create)
       aewbfParams.numHistory = 10;
       aewbfParams.numSmoothSteps = 1;
 
-      OSA_printf("ALG_aewbCreate: algAlloc\n");
 
       numMem = IAEWBF_SIG.ialg.algAlloc((IALG_Params *)&aewbfParams, NULL, gSIG_Obj.memTab_aewbf);
       while(numMem > 0){
           gSIG_Obj.memTab_aewbf[numMem-1].base = malloc(gSIG_Obj.memTab_aewbf[numMem-1].size);
           numMem --;
       }
-        OSA_printf("ALG_aewbCreate: algInit\n");
 
       gSIG_Obj.handle_aewbf = (IALG_Handle)gSIG_Obj.memTab_aewbf[0].base;
       retval = IAEWBF_SIG.ialg.algInit(gSIG_Obj.handle_aewbf, gSIG_Obj.memTab_aewbf, NULL, (IALG_Params *)&aewbfParams);
@@ -832,7 +751,6 @@ void *ALG_aewbCreate(ALG_AewbCreate *create)
           return NULL;
       }
 
-        OSA_printf("ALG_aewbCreate: SIG_2A_config\n");
       retval = SIG_2A_config(gSIG_Obj.handle_aewbf);
       if(retval == -1) {
           OSA_ERROR("ERROR: SIG_2A_config\n");
@@ -844,7 +762,6 @@ void *ALG_aewbCreate(ALG_AewbCreate *create)
       //ALG_aewbSetSensorDcsub(0);
       //ALG_aewbSetSensorGain(sensorGain);
       //TI_2A_SetEEValues(create->shiftValue);
-      OSA_printf("ALG_aewbCreate: finished\n");
       return &gSIG_Obj;
   }
 
@@ -1742,7 +1659,7 @@ void SIG2A_applySettings(void)
     static int frame_cnt = 0;
     static int frame_cnt_ircut = 0;
     extern int gDayNight;
-    int gain;
+    int offset, gain;
     /*
     //Setup day night mode
     if (lowlight) {
@@ -1810,20 +1727,27 @@ void SIG2A_applySettings(void)
         hn->Gain.Old = hn->Gain.New;
         //OSA_printf("SIG2A_applySettings: new = %d old = %d Rgain = %d Ggain = %d Bgain = %d\n",
         //           hn->Gain.New, hn->Gain.Old, hn->RGBgain[0], hn->RGBgain[1], hn->RGBgain[2]);
+        DRV_isifSetDgain(hn->RGBgain[1] , hn->RGBgain[0], hn->RGBgain[2], hn->RGBgain[1], 0);
     }
+
+    if(hn->Offset.New != hn->Offset.Old) {
+        hn->Offset.Old = hn->Offset.New;
+        ALG_aewbSetSensorDcsub(hn->Offset.New);
+    }
+
+
     //DRV_isifSetDgain(512, 512, 512, 512, 0);
     //gain = hn->Gain.New - hn->RGBgain[hn->maxi];
     //DRV_isifSetDgain(gain + hn->RGBgain[1] , gain + hn->RGBgain[0], gain + hn->RGBgain[2], gain + hn->RGBgain[1], 0);
     //gain = hn->Gain.New - hn->RGBgain[hn->maxi];
-    DRV_isifSetDgain(hn->RGBgain[1] , hn->RGBgain[0], hn->RGBgain[2], hn->RGBgain[1], 0);
 
 
     //Config gamma correction tables
     dataG.tableSize = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SIZE_512;
     dataG.tableSrc  = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SELECT_RAM;
-    dataG.bypassR = 0;
-    dataG.bypassG = 0;
-    dataG.bypassB = 0;
+    dataG.bypassR = 1;
+    dataG.bypassG = 1;
+    dataG.bypassB = 1;
     dataG.tableR = hn->RGBh[0];
     dataG.tableG = hn->RGBh[1];
     dataG.tableB = hn->RGBh[2];
@@ -1841,13 +1765,17 @@ void SIG2A_applySettings(void)
     ipipeWb.gainGb = hn->Gain;
     ipipeWb.gainB  = hn->Gain;
     */
-    ipipeWb.gainR  = 512;
-    ipipeWb.gainGr = 512;
-    ipipeWb.gainGb = 512;
-    ipipeWb.gainB  = 512;
 
-    DRV_ipipeSetWbOffset(0);
-    DRV_ipipeSetWb(&ipipeWb);
+    gain = (4000<<9)/(hn->Hmax[0] - hn->Hmin[0]);
+    ipipeWb.gainR  = gain;
+    ipipeWb.gainGr = gain;
+    ipipeWb.gainGb = gain;
+    ipipeWb.gainB  = gain;
+
+    offset = hn->Hmin[0] > 2047 ? 2047 : hn->Hmin[0];
+    //OSA_printf("SIG2A_applySettings: ofset = %d gain = %d\n", -offset, gain);
+    //DRV_ipipeSetWbOffset(-offset);
+    //DRV_ipipeSetWb(&ipipeWb);
 
 
     //Setup RGB2RGB matrix
