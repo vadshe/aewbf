@@ -440,15 +440,15 @@ int SIG_2A_config(IALG_Handle handle)
     hn->Ydiff = 10; // Max differnce Y persent
     hn->YRange.max = 0;
     hn->YRange.min = 4095;
-    hn->GR = 0;
-    hn->GB = 0;
+    //hn->GR = 0;
+    //hn->GB = 0;
     //hn->Offset = 0;
     hn->RGBgain[0] = 512;
     hn->RGBgain[1] = 512;
     hn->RGBgain[2] = 512;
     hn->maxi = 0;
     //For Aptina MT9P006 5 mpix
-    hn->HmaxTh = 4000;
+    hn->HmaxTh = 3900;
     hn->HminTh = 0;
     hn->HhalfTh = 100;
     hn->Hhalf = 0;
