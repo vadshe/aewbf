@@ -191,7 +191,8 @@ static void ALG_SIG_config(IALG_Handle handle)
     //Config Expouse
     DRV_imgsSetEshutter(hn->Exp.Range.max, 0);
     OSA_printf("ALG_SIG_config: hn->Exp.Range.max = %d\n", hn->Exp.Range.max);
-    ALG_aewbSetSensorDcsub(hn->Offset.New);
+    //ALG_aewbSetSensorDcsub(hn->Offset.New);
+    ALG_aewbSetSensorDcsub(170);
 
     //Config contrast and Brightness
     //DRV_ipipeSetYoffet((pParm->yuv_adj_brt-128));
@@ -446,9 +447,10 @@ int SIG_2A_config(IALG_Handle handle)
     hn->RGBgain[0] = 512;
     hn->RGBgain[1] = 512;
     hn->RGBgain[2] = 512;
+    hn->gain = 512;
     hn->maxi = 0;
     //For Aptina MT9P006 5 mpix
-    hn->HmaxTh = 3900;
+    hn->HmaxTh = 4000;
     hn->HminTh = 0;
     hn->HhalfTh = 100;
     hn->Hhalf = 0;
@@ -1660,8 +1662,9 @@ void SIG2A_applySettings(void)
     static int frame_cnt_ircut = 0;
     extern int gDayNight;
     int offset, gain;
-    /*
+
     //Setup day night mode
+    /*
     if (lowlight) {
         if ((hn->Y < 150) && gDayNight) { // Open IRCut if too dark
             frame_cnt++;
@@ -1685,19 +1688,27 @@ void SIG2A_applySettings(void)
             }
         }
     }
-    // Go to low FPS mode if 150 frames dark
-    if (!lowlight) {
-        if (hn->Y < 130) {
-            darkframe++;
-            if (darkframe > 150) {
-                DRV_imgsSetAEPriority(1);
-                darkframe = 0;
-            }
-        } else {
+    */
+    // Go to low FPS mode if 60 frames dark
+    if (hn->lowlight&1 && hn->lowlight&4) {
+        darkframe++;
+        if (darkframe > 60) {
+            DRV_imgsSetAEPriority(1);
             darkframe = 0;
+            hn->lowlight ^= 4;
+        }
+    }
+
+    if (hn->lowlight&2 && hn->lowlight&8) {
+        darkframe++;
+        if (darkframe > 60) {
+            ALG_aewbSetNDShutterOnOff(0);
+            darkframe = 0;
+            hn->lowlight ^= 8;
         }
     }
     // Go to High FPS mode if 60 frames light
+    /*
     if (lowlight) {
         if (hn->Y > 150) {
             darkframe++;
@@ -1710,6 +1721,7 @@ void SIG2A_applySettings(void)
         }
     }
     */
+
     //DRV_imgsSetAEPriority(0);
     //ALG_aewbSetNDShutterOnOff(0);
 
@@ -1727,13 +1739,14 @@ void SIG2A_applySettings(void)
         hn->Gain.Old = hn->Gain.New;
         //OSA_printf("SIG2A_applySettings: new = %d old = %d Rgain = %d Ggain = %d Bgain = %d\n",
         //           hn->Gain.New, hn->Gain.Old, hn->RGBgain[0], hn->RGBgain[1], hn->RGBgain[2]);
-        DRV_isifSetDgain(hn->RGBgain[1] , hn->RGBgain[0], hn->RGBgain[2], hn->RGBgain[1], 0);
     }
+    DRV_isifSetDgain(hn->RGBgain[1] , hn->RGBgain[0], hn->RGBgain[2], hn->RGBgain[1], 0);
 
     if(hn->Offset.New != hn->Offset.Old) {
         hn->Offset.Old = hn->Offset.New;
-        ALG_aewbSetSensorDcsub(hn->Offset.New);
     }
+    //ALG_aewbSetSensorDcsub(hn->Offset.New);
+    ALG_aewbSetSensorDcsub(170);
 
 
     //DRV_isifSetDgain(512, 512, 512, 512, 0);
@@ -1748,9 +1761,9 @@ void SIG2A_applySettings(void)
     dataG.bypassR = 1;
     dataG.bypassG = 1;
     dataG.bypassB = 1;
-    dataG.tableR = hn->RGBh[0];
-    dataG.tableG = hn->RGBh[1];
-    dataG.tableB = hn->RGBh[2];
+    dataG.tableR = hn->RGB[0].hist;
+    dataG.tableG = hn->RGB[1].hist;
+    dataG.tableB = hn->RGB[2].hist;
     //Setup gamma tables
     if(CSL_ipipeSetGammaConfig(&gCSL_ipipeHndl, &dataG) != CSL_SOK)
         OSA_ERROR("Fail CSL_ipipeSetGammaConfig!!!\n");
@@ -1766,16 +1779,16 @@ void SIG2A_applySettings(void)
     ipipeWb.gainB  = hn->Gain;
     */
 
-    gain = (4000<<9)/(hn->Hmax[0] - hn->Hmin[0]);
-    ipipeWb.gainR  = gain;
-    ipipeWb.gainGr = gain;
-    ipipeWb.gainGb = gain;
-    ipipeWb.gainB  = gain;
+    //gain = (4000<<9)/(hn->Hmax[0] - hn->Hmin[0]);
+    ipipeWb.gainR  = hn->gain;
+    ipipeWb.gainGr = hn->gain;
+    ipipeWb.gainGb = hn->gain;
+    ipipeWb.gainB  = hn->gain;
 
     offset = hn->Hmin[0] > 2047 ? 2047 : hn->Hmin[0];
     //OSA_printf("SIG2A_applySettings: ofset = %d gain = %d\n", -offset, gain);
     //DRV_ipipeSetWbOffset(-offset);
-    //DRV_ipipeSetWb(&ipipeWb);
+    DRV_ipipeSetWb(&ipipeWb);
 
 
     //Setup RGB2RGB matrix
