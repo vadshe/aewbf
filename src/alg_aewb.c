@@ -199,6 +199,7 @@ static void ALG_SIG_config(IALG_Handle handle)
     //DRV_ipipeSetContrastBrightness(pParm->yuv_adj_ctr, 0x0);
 
     //Config gamma correction tables
+
     dataG.tableSize = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SIZE_512;
     dataG.tableSrc  = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SELECT_RAM;
     dataG.bypassR = 0;
@@ -218,6 +219,7 @@ static void ALG_SIG_config(IALG_Handle handle)
 
     if(CSL_ipipeSetGammaConfig(&gCSL_ipipeHndl, &dataG) != CSL_SOK)
         OSA_ERROR("Fail CSL_ipipeSetGammaConfig!!!\n");
+
 
 
     //Config RGB2RGB matrix
@@ -438,6 +440,17 @@ int SIG_2A_config(IALG_Handle handle)
     hn->Offset.Th = 10; //10%
     hn->Offset.Diff = 0;
 
+    //ISIF offset setup
+    hn->Y.Step = 1;
+    hn->Y.New = 1;
+    hn->Y.Old = 1;
+    hn->Y.Max = 1;
+    hn->Y.Min = 1;
+    hn->Y.Range.min = 0;
+    hn->Y.Range.max = 4095;
+    hn->Y.Th = 10; //10%
+    hn->Y.Diff = 0;
+
     hn->Ydiff = 10; // Max differnce Y persent
     hn->YRange.max = 0;
     hn->YRange.min = 4095;
@@ -450,10 +463,14 @@ int SIG_2A_config(IALG_Handle handle)
     hn->gain = 512;
     hn->maxi = 0;
     //For Aptina MT9P006 5 mpix
-    hn->HmaxTh = 4000;
+    hn->HmaxTh = 3800;
     hn->HminTh = 0;
     hn->HhalfTh = 100;
     hn->Hhalf = 0;
+
+    hn->RGB[0].MaxTh = 3800;
+    hn->RGB[1].MaxTh = 3800;
+    hn->RGB[2].MaxTh = 3800;
 
     retval = IAEWBF_SIG.control((IAEWBF_Handle)gSIG_Obj.handle_aewbf, IAEWBF_CMD_SET_CONFIG, &DP, NULL);
     if(retval == -1) {
@@ -1082,7 +1099,7 @@ int Get_BoxCar(IALG_Handle handle)
     hn->box = pBufInfo->virtAddr;
     hn->w = gDRV_ipipeObj.boxcarInfo.width;
     hn->h = gDRV_ipipeObj.boxcarInfo.height;
-    hn->SatTh = hn->w*hn->h/100;
+    hn->SatTh = hn->w*hn->h/200;
 
     return OSA_SOK;
 }
@@ -1756,17 +1773,19 @@ void SIG2A_applySettings(void)
 
 
     //Config gamma correction tables
+    /*
     dataG.tableSize = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SIZE_512;
     dataG.tableSrc  = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SELECT_RAM;
-    dataG.bypassR = 1;
-    dataG.bypassG = 1;
-    dataG.bypassB = 1;
+    dataG.bypassR = 0;
+    dataG.bypassG = 0;
+    dataG.bypassB = 0;
     dataG.tableR = hn->RGB[0].hist;
     dataG.tableG = hn->RGB[1].hist;
     dataG.tableB = hn->RGB[2].hist;
     //Setup gamma tables
     if(CSL_ipipeSetGammaConfig(&gCSL_ipipeHndl, &dataG) != CSL_SOK)
         OSA_ERROR("Fail CSL_ipipeSetGammaConfig!!!\n");
+        */
 
     //Setup isif white balance gain
     //rgain = (hn->G<<9)/hn->R;

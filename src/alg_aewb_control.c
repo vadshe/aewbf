@@ -75,66 +75,6 @@ short ALG_aewbSetSensorExposure(int shutter)
   return 0;
 }
 
-short ALG_aewbSetDayNight(IALG_Handle handle, int lowlight)
-{
-    DRV_IpipeWb ipipeWb;
-    static AWB_PARAM PreAwb_Data;
-    IAEWBF_SIG_Obj *hn = (IAEWBF_SIG_Obj *)handle;
-    static int darkframe = 0;
-    static int frame_cnt = 0;
-    static int frame_cnt_ircut = 0;
-    extern int gDayNight;
-
-    if (lowlight) {
-        if ((hn->Y < 150) && gDayNight) { // Open IRCut if too dark
-            frame_cnt++;
-            if (frame_cnt >= 150) {
-                gDayNight = 0; // Night
-                ALG_aewbSetNDShutterOnOff(gDayNight);
-                frame_cnt = 0;
-            }
-        } else {
-            frame_cnt = 0;
-        }
-    }
-
-    if (gDayNight == 0) {
-        if (hn->Y > 240) {  // Close IRCut
-            frame_cnt_ircut++;
-            if (frame_cnt_ircut >= 150){
-                gDayNight = 1; // Day
-                ALG_aewbSetNDShutterOnOff(gDayNight);
-                frame_cnt_ircut = 0;
-            }
-        }
-    }
-
-    // Go to low FPS mode if 150 frames dark
-    if (!lowlight) {
-        if (hn->Y < 130) {
-            darkframe++;
-            if (darkframe > 150) {
-                DRV_imgsSetAEPriority(1);
-                darkframe = 0;
-            }
-        } else {
-            darkframe = 0;
-        }
-    }
-
-    // Go to High FPS mode if 60 frames light
-    if (lowlight) {
-        if (hn->Y > 150) {
-            darkframe++;
-            if (darkframe > 60) {
-                DRV_imgsSetAEPriority(0);
-                darkframe = 0;
-            }
-        } else {
-            darkframe = 0;
-        }
-    }
-}
 
 short ALG_aewbSetIpipeWb(AWB_PARAM  *pAwb_Data, int DGainEnable, int lowlight)
 {
