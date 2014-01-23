@@ -26,6 +26,10 @@ AEW_EXT_PARAM Aew_ext_parameter;
 extern AWB_OUTPUT_DATA      gOutAWBData;
 extern DRV_IpipeObj gDRV_ipipeObj;      //For boxcar
 extern CSL_IpipeObj gCSL_ipipeHndl;   //For gamma and rgb2rgb
+extern int gFlicker;
+
+extern int gAePriorityMode, gBWMode, gDayNight, gIRCut;
+
 
 #define GIO_AUTO_IRIS	(83)
 
@@ -267,14 +271,188 @@ static void ALG_SIG_config(IALG_Handle handle)
 
 }
 
+void SIG2A_applySettings(void)
+{
+    IAEWBF_SIG_Obj *hn = (IAEWBF_SIG_Obj *)gSIG_Obj.handle_aewbf;
+    CSL_IpipeGammaConfig dataG;
+    DRV_IpipeWb ipipeWb;
+    CSL_IpipeRgb2RgbConfig rgb2rgb;
+
+    static int darkframe = 0;
+    static int frame_cnt = 0;
+    static int frame_cnt_ircut = 0;
+    //extern int gDayNight;
+    int offset, gain;
+
+    OSA_printf("SIG2A_apply: gAePriorityMode = %d gBWMode = %d gDayNight =%d gIRCut = %d\n",
+               gAePriorityMode, gBWMode, gDayNight, gIRCut);
+
+    if(gIRCut != hn->gIRCut) {
+        if      (gIRCut == ALG_IRCUT_OPEN)  DRV_imgsNDShutter(0, gBWMode);  // Night mode
+        else if (gIRCut == ALG_IRCUT_CLOSE) DRV_imgsNDShutter(1, gBWMode);   // Day mode
+        else if (gIRCut == ALG_IRCUT_AUTO) { // IRCUT_AUTO
+            if (hn->gIRCut == ALG_IRCUT_OPEN  && gDayNight == 1) DRV_imgsNDShutter(1, gBWMode);   // Day mode
+            if (hn->gIRCut == ALG_IRCUT_CLOSE && gDayNight == 0) DRV_imgsNDShutter(0, gBWMode);    // Night mode
+        }
+        hn->gIRCut = gIRCut;
+    }
+
+    //Setup day night mode
+    /*
+    if (lowlight) {
+        if ((hn->Y < 150) && gDayNight) { // Open IRCut if too dark
+            frame_cnt++;
+            if (frame_cnt >= 150) {
+                gDayNight = 0; // Night
+                ALG_aewbSetNDShutterOnOff(gDayNight);
+                frame_cnt = 0;
+            }
+        } else {
+            frame_cnt = 0;
+        }
+    }
+
+    if (gDayNight == 0) {
+        if (hn->Y > 240) {  // Close IRCut
+            frame_cnt_ircut++;
+            if (frame_cnt_ircut >= 150){
+                gDayNight = 1; // Day
+                ALG_aewbSetNDShutterOnOff(gDayNight);
+                frame_cnt_ircut = 0;
+            }
+        }
+    }
+    */
+    // Go to low FPS mode if 60 frames dark
+    if (hn->lowlight&1 && hn->lowlight&4) {
+        darkframe++;
+        if (darkframe > 60) {
+            DRV_imgsSetAEPriority(1);
+            darkframe = 0;
+            hn->lowlight ^= 4;
+        }
+    }
+
+    if (hn->lowlight&2 && hn->lowlight&8) {
+        darkframe++;
+        if (darkframe > 60) {
+            ALG_aewbSetNDShutterOnOff(0);
+            gDayNight = 0;
+            darkframe = 0;
+            hn->lowlight ^= 8;
+        }
+    }
+    // Go to High FPS mode if 60 frames light
+    /*
+    if (lowlight) {
+        if (hn->Y > 150) {
+            darkframe++;
+            if (darkframe > 60) {
+                DRV_imgsSetAEPriority(0);
+                darkframe = 0;
+            }
+        } else {
+            darkframe = 0;
+        }
+    }
+    */
+
+    //DRV_imgsSetAEPriority(0);
+    //ALG_aewbSetNDShutterOnOff(0);
+
+    //Seting Expouse
+    if(hn->Exp.New != hn->Exp.Old) {
+        hn->Exp.Old = hn->Exp.New;
+        DRV_imgsSetEshutter(hn->Exp.New, 0);
+    }
+
+    //ISIF gain seting
+    if(hn->GISIF.New != hn->GISIF.Old) {
+        hn->RGBgain[1] = hn->GISIF.New;
+        hn->RGBgain[0] = hn->GISIF.New*hn->RGBgain[0]/hn->GISIF.Old;
+        hn->RGBgain[2] = hn->GISIF.New*hn->RGBgain[2]/hn->GISIF.Old;
+        hn->GISIF.Old = hn->GISIF.New;
+        //OSA_printf("SIG2A_applySettings: new = %d old = %d Rgain = %d Ggain = %d Bgain = %d\n",
+        //           hn->Gain.New, hn->Gain.Old, hn->RGBgain[0], hn->RGBgain[1], hn->RGBgain[2]);
+        //DRV_isifSetDgain(hn->RGBgain[1] , hn->RGBgain[0], hn->RGBgain[2], hn->RGBgain[1], 0);
+    }
+    DRV_isifSetDgain(hn->RGBgain[1] , hn->RGBgain[0], hn->RGBgain[2], hn->RGBgain[1], 0);
+
+    if(hn->Offset.New != hn->Offset.Old) {
+        hn->Offset.Old = hn->Offset.New;
+        //ALG_aewbSetSensorDcsub(hn->Offset.New);
+        ALG_aewbSetSensorDcsub(170);
+    }
+
+
+    //DRV_isifSetDgain(512, 512, 512, 512, 0);
+    //gain = hn->Gain.New - hn->RGBgain[hn->maxi];
+    //DRV_isifSetDgain(gain + hn->RGBgain[1] , gain + hn->RGBgain[0], gain + hn->RGBgain[2], gain + hn->RGBgain[1], 0);
+    //gain = hn->Gain.New - hn->RGBgain[hn->maxi];
+
+
+    //Config gamma correction tables
+    /*
+    dataG.tableSize = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SIZE_512;
+    dataG.tableSrc  = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SELECT_RAM;
+    dataG.bypassR = 0;
+    dataG.bypassG = 0;
+    dataG.bypassB = 0;
+    dataG.tableR = hn->RGB[0].hist;
+    dataG.tableG = hn->RGB[1].hist;
+    dataG.tableB = hn->RGB[2].hist;
+    //Setup gamma tables
+    if(CSL_ipipeSetGammaConfig(&gCSL_ipipeHndl, &dataG) != CSL_SOK)
+        OSA_ERROR("Fail CSL_ipipeSetGammaConfig!!!\n");
+        */
+
+
+    //gain = (4000<<9)/(hn->Hmax[0] - hn->Hmin[0]);
+    if(hn->GIFIF.New !=  hn->GIFIF.Old){
+        hn->GIFIF.Old = hn->GIFIF.New;
+        ipipeWb.gainR  = hn->GIFIF.New;
+        ipipeWb.gainGr = hn->GIFIF.New;
+        ipipeWb.gainGb = hn->GIFIF.New;
+        ipipeWb.gainB  = hn->GIFIF.New;
+        DRV_ipipeSetWb(&ipipeWb);
+    }
+
+    //offset = hn->Hmin[0] > 2047 ? 2047 : hn->Hmin[0];
+    //OSA_printf("SIG2A_applySettings: ofset = %d gain = %d\n", -offset, gain);
+    //DRV_ipipeSetWbOffset(-offset);
+
+
+    //Config RGB2RGB matrix
+    if(0){
+        rgb2rgb.matrix[0][0] = 256;
+        rgb2rgb.matrix[0][1] = 0;
+        rgb2rgb.matrix[0][2] = 0;
+
+        rgb2rgb.matrix[1][0] = 0;
+        rgb2rgb.matrix[1][1] = 256;
+        rgb2rgb.matrix[1][2] = 0;
+
+        rgb2rgb.matrix[2][0] = 0;
+        rgb2rgb.matrix[2][1] = 0;
+        rgb2rgb.matrix[2][2] = 256;
+
+        rgb2rgb.offset[0]    = 0;
+        rgb2rgb.offset[1]    = 0;
+        rgb2rgb.offset[2]    = 0;
+
+        if(DRV_ipipeSetRgb2Rgb(&rgb2rgb) != CSL_SOK)
+            OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
+        if(DRV_ipipeSetRgb2Rgb2(&rgb2rgb) != CSL_SOK)
+            OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
+    }
+
+}
+
+
 int SIG_2A_config(IALG_Handle handle)
 {
     IAEWBF_SIG_Obj *hn = (IAEWBF_SIG_Obj *)handle;
-    IAEWBF_DynamicParams DP;
     int i, stepSize;
-    int retval;
-    DP.size = sizeof(DP);
-    DP.numRanges = 0;
 
     i = 0; aewbFrames = 0; stepSize = 1;
 
@@ -285,11 +463,6 @@ int SIG_2A_config(IALG_Handle handle)
     } else {
         ALG_aewbSetSensor50_60Hz(0); // 30FPS
     }
-
-    sensorGain = 1000;
-    lowlight = DRV_imgsGetAEPriority();
-
-    extern int gFlicker;
 
     if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0) 	// AR0331 sensor
     {
@@ -371,29 +544,11 @@ int SIG_2A_config(IALG_Handle handle)
         } else {
             stepSize = 1;
         }
-    } else if (strcmp(DRV_imgsGetImagerName(), "OMNIVISION_OV271X_1080P") == 0) // OV271X sensor
-    {
-        if(gFlicker == VIDEO_NTSC)			// 60 Hz flicker
-        {
-            if (gSIG_Obj.sensorFps == 25)
-                DRV_imgsSetFlicker(0x12);
-            else if (gSIG_Obj.sensorFps == 30)
-                DRV_imgsSetFlicker(0x22);
-        } else if(gFlicker == VIDEO_PAL)	// 50 Hz flicker
-        {
-            if (gSIG_Obj.sensorFps == 25)
-                DRV_imgsSetFlicker(0x11);
-            else if (gSIG_Obj.sensorFps == 30)
-                DRV_imgsSetFlicker(0x21);
-        } else
-        {
-            DRV_imgsSetFlicker(0);
-        }
     } else
     {
         stepSize = 1;
     }
-
+    /*
     DP.numRanges ++;
 
     DP.sensorGainRange[i].min = 1000;
@@ -404,12 +559,18 @@ int SIG_2A_config(IALG_Handle handle)
     //DP.isifGainRange[i].max = 4095;
     DP.YRange.min = 0;
     DP.YRange.max = 0;
+    */
+
     //DP.Ythresh = 10;
     //DP.ExpStep = stepSize;
 
+    sensorGain = 1000;
+    lowlight = DRV_imgsGetAEPriority();
+
+
     //Exposure setup
     hn->Exp.Step = stepSize;
-    hn->Exp.Old = sensorExposureMax;
+    hn->Exp.Old = sensorExposureMax-1;
     hn->Exp.New = sensorExposureMax;
     hn->Exp.Max = sensorExposureMax;
     hn->Exp.Min = sensorExposureMax;
@@ -419,28 +580,39 @@ int SIG_2A_config(IALG_Handle handle)
     hn->Exp.Diff = 0;
 
     //ISIF gain setup
-    hn->Gain.Step = 16;
-    hn->Gain.New = 512;
-    hn->Gain.Old = 512;
-    hn->Gain.Max = 512;
-    hn->Gain.Min = 512;
-    hn->Gain.Range.min = 1;
-    hn->Gain.Range.max = 4095;
-    hn->Gain.Th = 10; //10%
-    hn->Gain.Diff = 0;
+    hn->GISIF.Step = 16;
+    hn->GISIF.Old = 512;
+    hn->GISIF.New = 511;
+    hn->GISIF.Max = 512;
+    hn->GISIF.Min = 512;
+    hn->GISIF.Range.min = 100;
+    hn->GISIF.Range.max = 4095;
+    hn->GISIF.Th = 10; //10%
+    hn->GISIF.Diff = 0;
+
+    //IFIF gain setup
+    hn->GIFIF.Step = 16;
+    hn->GIFIF.Old = 512;
+    hn->GIFIF.New = 511;
+    hn->GIFIF.Max = 512;
+    hn->GIFIF.Min = 512;
+    hn->GIFIF.Range.min = 512;
+    hn->GIFIF.Range.max = 8180;
+    hn->GIFIF.Th = 10; //10%
+    hn->GIFIF.Diff = 0;
 
     //ISIF offset setup
     hn->Offset.Step = 1;
+    hn->Offset.Old = 0;
     hn->Offset.New = 1;
-    hn->Offset.Old = 1;
     hn->Offset.Max = 1;
     hn->Offset.Min = 1;
-    hn->Offset.Range.min = 0;
+    hn->Offset.Range.min = 1;
     hn->Offset.Range.max = 4095;
     hn->Offset.Th = 10; //10%
     hn->Offset.Diff = 0;
 
-    //ISIF offset setup
+    //Y setup
     hn->Y.Step = 1;
     hn->Y.New = 1;
     hn->Y.Old = 1;
@@ -451,17 +623,10 @@ int SIG_2A_config(IALG_Handle handle)
     hn->Y.Th = 10; //10%
     hn->Y.Diff = 0;
 
-    hn->Ydiff = 10; // Max differnce Y persent
-    hn->YRange.max = 0;
-    hn->YRange.min = 4095;
-    //hn->GR = 0;
-    //hn->GB = 0;
-    //hn->Offset = 0;
     hn->RGBgain[0] = 512;
     hn->RGBgain[1] = 512;
     hn->RGBgain[2] = 512;
-    hn->gain = 512;
-    hn->maxi = 0;
+
     //For Aptina MT9P006 5 mpix
     hn->HmaxTh = 3800;
     hn->HminTh = 0;
@@ -472,12 +637,15 @@ int SIG_2A_config(IALG_Handle handle)
     hn->RGB[1].MaxTh = 3800;
     hn->RGB[2].MaxTh = 3800;
 
+    hn->gIRCut = 10;
+
+    /*
     retval = IAEWBF_SIG.control((IAEWBF_Handle)gSIG_Obj.handle_aewbf, IAEWBF_CMD_SET_CONFIG, &DP, NULL);
     if(retval == -1) {
         OSA_ERROR("IAEWBF_SIG.control\n");
         return retval;
     }
-
+    */
     ALG_SIG_config(gSIG_Obj.handle_aewbf);
 
     return 0;
@@ -1668,167 +1836,6 @@ void TI2AFunc(void *pAddr)
 
 }
 
-void SIG2A_applySettings(void)
-{
-    IAEWBF_SIG_Obj *hn = (IAEWBF_SIG_Obj *)gSIG_Obj.handle_aewbf;
-    CSL_IpipeGammaConfig dataG;
-    DRV_IpipeWb ipipeWb;
-
-    static int darkframe = 0;
-    static int frame_cnt = 0;
-    static int frame_cnt_ircut = 0;
-    extern int gDayNight;
-    int offset, gain;
-
-    //Setup day night mode
-    /*
-    if (lowlight) {
-        if ((hn->Y < 150) && gDayNight) { // Open IRCut if too dark
-            frame_cnt++;
-            if (frame_cnt >= 150) {
-                gDayNight = 0; // Night
-                ALG_aewbSetNDShutterOnOff(gDayNight);
-                frame_cnt = 0;
-            }
-        } else {
-            frame_cnt = 0;
-        }
-    }
-
-    if (gDayNight == 0) {
-        if (hn->Y > 240) {  // Close IRCut
-            frame_cnt_ircut++;
-            if (frame_cnt_ircut >= 150){
-                gDayNight = 1; // Day
-                ALG_aewbSetNDShutterOnOff(gDayNight);
-                frame_cnt_ircut = 0;
-            }
-        }
-    }
-    */
-    // Go to low FPS mode if 60 frames dark
-    if (hn->lowlight&1 && hn->lowlight&4) {
-        darkframe++;
-        if (darkframe > 60) {
-            DRV_imgsSetAEPriority(1);
-            darkframe = 0;
-            hn->lowlight ^= 4;
-        }
-    }
-
-    if (hn->lowlight&2 && hn->lowlight&8) {
-        darkframe++;
-        if (darkframe > 60) {
-            ALG_aewbSetNDShutterOnOff(0);
-            darkframe = 0;
-            hn->lowlight ^= 8;
-        }
-    }
-    // Go to High FPS mode if 60 frames light
-    /*
-    if (lowlight) {
-        if (hn->Y > 150) {
-            darkframe++;
-            if (darkframe > 60) {
-                DRV_imgsSetAEPriority(0);
-                darkframe = 0;
-            }
-        } else {
-            darkframe = 0;
-        }
-    }
-    */
-
-    //DRV_imgsSetAEPriority(0);
-    //ALG_aewbSetNDShutterOnOff(0);
-
-    //Seting Expouse
-    if(hn->Exp.New != hn->Exp.Old) {
-        hn->Exp.Old = hn->Exp.New;
-    }
-    DRV_imgsSetEshutter(hn->Exp.New, 0);
-
-    //ISIF gain seting
-    if(hn->Gain.New != hn->Gain.Old) {
-        hn->RGBgain[1] = hn->Gain.New;
-        hn->RGBgain[0] = hn->Gain.New*hn->RGBgain[0]/hn->Gain.Old;
-        hn->RGBgain[2] = hn->Gain.New*hn->RGBgain[2]/hn->Gain.Old;
-        hn->Gain.Old = hn->Gain.New;
-        //OSA_printf("SIG2A_applySettings: new = %d old = %d Rgain = %d Ggain = %d Bgain = %d\n",
-        //           hn->Gain.New, hn->Gain.Old, hn->RGBgain[0], hn->RGBgain[1], hn->RGBgain[2]);
-    }
-    DRV_isifSetDgain(hn->RGBgain[1] , hn->RGBgain[0], hn->RGBgain[2], hn->RGBgain[1], 0);
-
-    if(hn->Offset.New != hn->Offset.Old) {
-        hn->Offset.Old = hn->Offset.New;
-    }
-    //ALG_aewbSetSensorDcsub(hn->Offset.New);
-    ALG_aewbSetSensorDcsub(170);
-
-
-    //DRV_isifSetDgain(512, 512, 512, 512, 0);
-    //gain = hn->Gain.New - hn->RGBgain[hn->maxi];
-    //DRV_isifSetDgain(gain + hn->RGBgain[1] , gain + hn->RGBgain[0], gain + hn->RGBgain[2], gain + hn->RGBgain[1], 0);
-    //gain = hn->Gain.New - hn->RGBgain[hn->maxi];
-
-
-    //Config gamma correction tables
-    /*
-    dataG.tableSize = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SIZE_512;
-    dataG.tableSrc  = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SELECT_RAM;
-    dataG.bypassR = 0;
-    dataG.bypassG = 0;
-    dataG.bypassB = 0;
-    dataG.tableR = hn->RGB[0].hist;
-    dataG.tableG = hn->RGB[1].hist;
-    dataG.tableB = hn->RGB[2].hist;
-    //Setup gamma tables
-    if(CSL_ipipeSetGammaConfig(&gCSL_ipipeHndl, &dataG) != CSL_SOK)
-        OSA_ERROR("Fail CSL_ipipeSetGammaConfig!!!\n");
-        */
-
-    //Setup isif white balance gain
-    //rgain = (hn->G<<9)/hn->R;
-    //bgain = (hn->G<<9)/hn->B;
-
-    /*
-    ipipeWb.gainR  = hn->Gain;
-    ipipeWb.gainGr = hn->Gain;
-    ipipeWb.gainGb = hn->Gain;
-    ipipeWb.gainB  = hn->Gain;
-    */
-
-    //gain = (4000<<9)/(hn->Hmax[0] - hn->Hmin[0]);
-    ipipeWb.gainR  = hn->gain;
-    ipipeWb.gainGr = hn->gain;
-    ipipeWb.gainGb = hn->gain;
-    ipipeWb.gainB  = hn->gain;
-
-    offset = hn->Hmin[0] > 2047 ? 2047 : hn->Hmin[0];
-    //OSA_printf("SIG2A_applySettings: ofset = %d gain = %d\n", -offset, gain);
-    //DRV_ipipeSetWbOffset(-offset);
-    DRV_ipipeSetWb(&ipipeWb);
-
-
-    //Setup RGB2RGB matrix
-    //if(DRV_ipipeSetRgb2Rgb(&rgb2rgb1) != CSL_SOK)
-        //OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
-    //if(DRV_ipipeSetRgb2Rgb2(&rgb2rgb1) != CSL_SOK)
-        //OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
-    //if(CSL_ipipeSetRgb2Rgb2Config(&gCSL_ipipeHndl, &rgb2rgb) != CSL_SOK)
-    //    OSA_ERROR("Fail CSL_ipipeSetRgb2Rgb2Config!!!\n");
-
-
-    //ALG_aewbSetIpipeWb(&ipipe_awb_gain, gALG_aewbObj.DGainEnable, lowlight);
-    //ALG_aewbSetDayNight(gSIG_Obj.handle_aewbf, lowlight);
-    //ALG_aewbSetSensorDcsub(0);
-    //ALG_aewbSetSensorExposure(sensorExposure);
-    //ALG_aewbfSet(gSIG_Obj.handle_aewbf);
-    //if (gALG_aewbObj.AGainEnable)
-    //{
-    //ALG_aewbSetSensorGain(sensorGain);
-    //}
-}
 
 void SIG2AFunc(void *pAddr)
 {
@@ -2214,8 +2221,8 @@ short ALG_aewbSetWBMode(int WBMode)
   }
 
   //TI_2A_config(1, gALG_aewbObj.saldre);
-  DRV_imgsSetEshutter(2, 0);
-  DRV_ipipeSetYoffet(0);
+  //DRV_imgsSetEshutter(2, 0);
+  //DRV_ipipeSetYoffet(0);
   HISTmode = WBMode;
 
   if (WBMode == 0)

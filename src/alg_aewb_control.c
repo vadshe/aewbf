@@ -536,7 +536,7 @@ short ALG_aewbSetNDShutterOnOff(int bIsDay)
     static int prevValue=-1;
 
 #ifdef ALG_AEWB_DEBUG
-    OSA_printf(" AEWB: NDShutter = %d Switch\n", bIsDay);
+    OSA_printf(" AEWB: NDShutter = %d gBWMode = %d gIRCut = %d\n", bIsDay, gBWMode, gIRCut);
 #endif
     prevValue = bIsDay;
 
