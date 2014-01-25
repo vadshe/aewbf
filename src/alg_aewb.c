@@ -28,7 +28,9 @@ extern DRV_IpipeObj gDRV_ipipeObj;      //For boxcar
 extern CSL_IpipeObj gCSL_ipipeHndl;   //For gamma and rgb2rgb
 extern int gFlicker;
 
-extern int gAePriorityMode, gBWMode, gDayNight, gIRCut;
+extern int gAePriorityMode, gBWMode, gDayNight, gIRCut, defaultFPS;
+extern int IRcutOpen, FPShigh;
+
 
 
 #define GIO_AUTO_IRIS	(83)
@@ -284,17 +286,46 @@ void SIG2A_applySettings(void)
     //extern int gDayNight;
     int offset, gain;
 
-    OSA_printf("SIG2A_apply: gAePriorityMode = %d gBWMode = %d gDayNight =%d gIRCut = %d\n",
-               gAePriorityMode, gBWMode, gDayNight, gIRCut);
+    OSA_printf("SIG2A_apply: gAePriorityMode = %d gBWMode = %d gDayNight =%d gIRCut = %d defaultFPS = %d IRcutOpen = %d hn->IRcutOpen = %d FPShigh = %d hn->FPShigh = %d\n",
+               gAePriorityMode, gBWMode, gDayNight, gIRCut, defaultFPS, IRcutOpen, hn->IRcutOpen, FPShigh, hn->FPShigh);
 
+    //IR-cut dynamic change
     if(gIRCut != hn->gIRCut) {
-        if      (gIRCut == ALG_IRCUT_OPEN)  DRV_imgsNDShutter(0, gBWMode);  // Night mode
-        else if (gIRCut == ALG_IRCUT_CLOSE) DRV_imgsNDShutter(1, gBWMode);   // Day mode
-        else if (gIRCut == ALG_IRCUT_AUTO) { // IRCUT_AUTO
-            if (hn->gIRCut == ALG_IRCUT_OPEN  && gDayNight == 1) DRV_imgsNDShutter(1, gBWMode);   // Day mode
-            if (hn->gIRCut == ALG_IRCUT_CLOSE && gDayNight == 0) DRV_imgsNDShutter(0, gBWMode);    // Night mode
-        }
+        if      (gIRCut == ALG_IRCUT_OPEN)  IRcutOpen = 1;  // Open
+        else if (gIRCut == ALG_IRCUT_CLOSE) IRcutOpen = 0;  // Close
+
         hn->gIRCut = gIRCut;
+    }
+
+    //Black and color night mode dynamic change
+    if(gBWMode != hn->gBWMode) {
+        if (gIRCut == ALG_IRCUT_AUTO && gIRCut == ALG_IRCUT_OPEN) {
+            DRV_imgsNDShutter(gIRCut, gBWMode);
+            //DRV_imgsSetBWmode(gBWMode);
+        }
+        hn->gBWMode = gBWMode;
+    }
+
+    //Algoritm change FPS
+    if (FPShigh != hn->FPShigh) {
+        if(hn->FPShigh == 1 ){
+            //Go to low FPS
+            if (gAePriorityMode == ALG_FPS_LOW)         DRV_imgsSetFramerate(defaultFPS>>1);
+            else if (gAePriorityMode == ALG_FPS_5FPS)   DRV_imgsSetFramerate(5);
+            else if (gAePriorityMode == ALG_FPS_NONE)   DRV_imgsSetFramerate(defaultFPS);
+        } else {
+            //Go to high FPS
+            DRV_imgsSetFramerate(defaultFPS);
+        }
+        hn->FPShigh = FPShigh;
+    }
+
+    //Algoritm change IR-cut
+    if (IRcutOpen != hn->IRcutOpen) {
+
+        DRV_imgsNDShutter(hn->IRcutOpen, gBWMode);
+        OSA_printf("SIG2A_apply: DRV_imgsNDShutter\n");
+        hn->IRcutOpen = IRcutOpen;
     }
 
     //Setup day night mode
@@ -323,25 +354,33 @@ void SIG2A_applySettings(void)
         }
     }
     */
-    // Go to low FPS mode if 60 frames dark
-    if (hn->lowlight&1 && hn->lowlight&4) {
+    // Go to low FPS mode
+    /*
+    if ( FPShigh == 1) {
         darkframe++;
         if (darkframe > 60) {
-            DRV_imgsSetAEPriority(1);
+            //gDayNight == 0;
+            if (gAePriorityMode == ALG_FPS_LOW)         DRV_imgsSetFramerate(defaultFPS>>1);
+            else if (gAePriorityMode == ALG_FPS_5FPS)   DRV_imgsSetFramerate(5);
+            else if (gAePriorityMode == ALG_FPS_NONE)   DRV_imgsSetFramerate(defaultFPS);
+            FPShigh == 0;
             darkframe = 0;
             hn->lowlight ^= 4;
         }
     }
 
-    if (hn->lowlight&2 && hn->lowlight&8) {
+    if (hn->IRcutOpen == 0 && FPShigh == 0) {
         darkframe++;
         if (darkframe > 60) {
-            ALG_aewbSetNDShutterOnOff(0);
-            gDayNight = 0;
+            DRV_imgsNDShutter(0, gBWMode);
+            //ALG_aewbSetNDShutterOnOff(0);
+            //gDayNight = 0;
             darkframe = 0;
-            hn->lowlight ^= 8;
+            hn->IRcutOpen = 1;
+            //hn->lowlight ^= 8;
         }
     }
+    */
     // Go to High FPS mode if 60 frames light
     /*
     if (lowlight) {
@@ -637,8 +676,11 @@ int SIG_2A_config(IALG_Handle handle)
     hn->RGB[1].MaxTh = 3800;
     hn->RGB[2].MaxTh = 3800;
 
+    //First value of dymanic parameters
     hn->gIRCut = 10;
-
+    hn->gBWMode = 10;
+    hn->IRcutOpen = 0; //IR-cut 1-open, 0 - close
+    hn->FPShigh = 0; //FPS 1-high, 0 - low
     /*
     retval = IAEWBF_SIG.control((IAEWBF_Handle)gSIG_Obj.handle_aewbf, IAEWBF_CMD_SET_CONFIG, &DP, NULL);
     if(retval == -1) {

@@ -98,7 +98,9 @@ typedef struct IAEWBF_SIG_Obj {
     XDAS_UInt32 lowlight;           //1 - Low light
 
     //Dynamic parametar
-    int gAePriorityMode, gBWMode, gDayNight, gIRCut;
+    int gAePriorityMode, gBWMode, gDayNight, gIRCut, defaultFPS;
+    int IRcutOpen; //IR-cut 1-open, 0 - close
+    int FPShigh; //FPS 1-high, 0 - low
 } IAEWBF_SIG_Obj;
 
 extern Int IAEWBF_SIG_alloc(const IALG_Params *algParams, IALG_Fxns **pf, IALG_MemRec memTab[]);

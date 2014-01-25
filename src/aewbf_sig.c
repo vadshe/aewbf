@@ -10,9 +10,14 @@
 #include <string.h>
 #include "iaewbf_sig.h"
 #include "aewbf_sig.h"
+#include "alg_aewb.h"
 
 
 extern IAEWBF_Fxns IAEWBF_SIG_IALG;
+extern int gAePriorityMode, gBWMode, gDayNight, gIRCut, defaultFPS;
+int IRcutOpen = 1; //IR-cut 1-open, 0 - close
+int FPShigh = 1; //FPS 1-high, 0 - low
+
 
 int up = 1, downExp = 1, wbR = 0, wbB = 0, wbS = 0, gnS = 0;
 int Rstep = 10, Bstep = 10, Rchange = 0, Bchange = 0;
@@ -409,8 +414,13 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                     // IFIF Gain
                     //if(hn->lowlight & 3) hn->gain = (3800<<9)/hn->Hmax[0];
                 }
-                //Come back to day light
-                //if(hn->lowlight & 2)
+
+                if(gIRCut == ALG_IRCUT_AUTO){
+
+                }
+                if(gAePriorityMode == ALG_FPS_LOW || gAePriorityMode == ALG_FPS_5FPS){
+
+                }
             }
 
             //Remove gup when chnges.
