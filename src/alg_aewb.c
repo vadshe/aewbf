@@ -29,7 +29,7 @@ extern CSL_IpipeObj gCSL_ipipeHndl;   //For gamma and rgb2rgb
 extern int gFlicker;
 
 extern int gAePriorityMode, gBWMode, gDayNight, gIRCut, defaultFPS;
-extern int IRcutOpen, FPShigh;
+extern int IRcutClose, FPShigh;
 
 
 
@@ -194,11 +194,11 @@ static void ALG_SIG_config(IALG_Handle handle)
     CSL_IpipeRgb2RgbConfig rgb2rgb;
     DRV_IpipeWb ipipeWb;
 
-    //Config Expouse
-    DRV_imgsSetEshutter(hn->Exp.Range.max, 0);
-    OSA_printf("ALG_SIG_config: hn->Exp.Range.max = %d\n", hn->Exp.Range.max);
-    //ALG_aewbSetSensorDcsub(hn->Offset.New);
-    ALG_aewbSetSensorDcsub(170);
+    DRV_imgsSetFramerate(defaultFPS); //Max FPS frame rate
+    DRV_imgsSetEshutter(hn->Exp.Range.max, 0); //Max expouse
+    ALG_aewbSetSensorDcsub(170); //Offset for Aptina MT9P006
+    //DRV_imgsNDShutterInit();
+    //DRV_imgsNDShutter(1, gBWMode); //Close IR-cut
 
     //Config contrast and Brightness
     //DRV_ipipeSetYoffet((pParm->yuv_adj_brt-128));
@@ -258,10 +258,10 @@ static void ALG_SIG_config(IALG_Handle handle)
 
     //Config ipipe gains and offset
 
-    ipipeWb.gainR  = 512;
-    ipipeWb.gainGr = 512;
-    ipipeWb.gainGb = 512;
-    ipipeWb.gainB  = 512;
+    ipipeWb.gainR  = hn->GIFIF.New;
+    ipipeWb.gainGr = hn->GIFIF.New;
+    ipipeWb.gainGb = hn->GIFIF.New;
+    ipipeWb.gainB  = hn->GIFIF.New;
 
     DRV_ipipeSetWbOffset(0);
     DRV_ipipeSetWb(&ipipeWb);
@@ -286,14 +286,13 @@ void SIG2A_applySettings(void)
     //extern int gDayNight;
     int offset, gain;
 
-    OSA_printf("SIG2A_apply: gAePriorityMode = %d gBWMode = %d gDayNight =%d gIRCut = %d defaultFPS = %d IRcutOpen = %d hn->IRcutOpen = %d FPShigh = %d hn->FPShigh = %d\n",
-               gAePriorityMode, gBWMode, gDayNight, gIRCut, defaultFPS, IRcutOpen, hn->IRcutOpen, FPShigh, hn->FPShigh);
+    OSA_printf("SIG2A_apply: gAePriorityMode = %d gBWMode = %d gDayNight =%d gIRCut = %d hn->gIRCut = %d defaultFPS = %d IRcutClose = %d hn->IRcutClose = %d FPShigh = %d hn->FPShigh = %d\n",
+               gAePriorityMode, gBWMode, gDayNight, gIRCut, hn->gIRCut, defaultFPS, IRcutClose, hn->IRcutClose, FPShigh, hn->FPShigh);
 
     //IR-cut dynamic change
     if(gIRCut != hn->gIRCut) {
-        if      (gIRCut == ALG_IRCUT_OPEN)  IRcutOpen = 1;  // Open
-        else if (gIRCut == ALG_IRCUT_CLOSE) IRcutOpen = 0;  // Close
-
+        if      (gIRCut == ALG_IRCUT_OPEN)  IRcutClose = 0;  // Open
+        else if (gIRCut == ALG_IRCUT_CLOSE) IRcutClose = 1;  // Close
         hn->gIRCut = gIRCut;
     }
 
@@ -321,88 +320,17 @@ void SIG2A_applySettings(void)
     }
 
     //Algoritm change IR-cut
-    if (IRcutOpen != hn->IRcutOpen) {
-
-        DRV_imgsNDShutter(hn->IRcutOpen, gBWMode);
+    if (IRcutClose != hn->IRcutClose) {
+        DRV_imgsNDShutter(IRcutClose, gBWMode);
         OSA_printf("SIG2A_apply: DRV_imgsNDShutter\n");
-        hn->IRcutOpen = IRcutOpen;
+        hn->IRcutClose = IRcutClose;
     }
 
-    //Setup day night mode
-    /*
-    if (lowlight) {
-        if ((hn->Y < 150) && gDayNight) { // Open IRCut if too dark
-            frame_cnt++;
-            if (frame_cnt >= 150) {
-                gDayNight = 0; // Night
-                ALG_aewbSetNDShutterOnOff(gDayNight);
-                frame_cnt = 0;
-            }
-        } else {
-            frame_cnt = 0;
-        }
-    }
-
-    if (gDayNight == 0) {
-        if (hn->Y > 240) {  // Close IRCut
-            frame_cnt_ircut++;
-            if (frame_cnt_ircut >= 150){
-                gDayNight = 1; // Day
-                ALG_aewbSetNDShutterOnOff(gDayNight);
-                frame_cnt_ircut = 0;
-            }
-        }
-    }
-    */
-    // Go to low FPS mode
-    /*
-    if ( FPShigh == 1) {
-        darkframe++;
-        if (darkframe > 60) {
-            //gDayNight == 0;
-            if (gAePriorityMode == ALG_FPS_LOW)         DRV_imgsSetFramerate(defaultFPS>>1);
-            else if (gAePriorityMode == ALG_FPS_5FPS)   DRV_imgsSetFramerate(5);
-            else if (gAePriorityMode == ALG_FPS_NONE)   DRV_imgsSetFramerate(defaultFPS);
-            FPShigh == 0;
-            darkframe = 0;
-            hn->lowlight ^= 4;
-        }
-    }
-
-    if (hn->IRcutOpen == 0 && FPShigh == 0) {
-        darkframe++;
-        if (darkframe > 60) {
-            DRV_imgsNDShutter(0, gBWMode);
-            //ALG_aewbSetNDShutterOnOff(0);
-            //gDayNight = 0;
-            darkframe = 0;
-            hn->IRcutOpen = 1;
-            //hn->lowlight ^= 8;
-        }
-    }
-    */
-    // Go to High FPS mode if 60 frames light
-    /*
-    if (lowlight) {
-        if (hn->Y > 150) {
-            darkframe++;
-            if (darkframe > 60) {
-                DRV_imgsSetAEPriority(0);
-                darkframe = 0;
-            }
-        } else {
-            darkframe = 0;
-        }
-    }
-    */
-
-    //DRV_imgsSetAEPriority(0);
-    //ALG_aewbSetNDShutterOnOff(0);
 
     //Seting Expouse
     if(hn->Exp.New != hn->Exp.Old) {
-        hn->Exp.Old = hn->Exp.New;
         DRV_imgsSetEshutter(hn->Exp.New, 0);
+        hn->Exp.Old = hn->Exp.New;
     }
 
     //ISIF gain seting
@@ -418,9 +346,9 @@ void SIG2A_applySettings(void)
     DRV_isifSetDgain(hn->RGBgain[1] , hn->RGBgain[0], hn->RGBgain[2], hn->RGBgain[1], 0);
 
     if(hn->Offset.New != hn->Offset.Old) {
-        hn->Offset.Old = hn->Offset.New;
         //ALG_aewbSetSensorDcsub(hn->Offset.New);
         ALG_aewbSetSensorDcsub(170);
+        hn->Offset.Old = hn->Offset.New;
     }
 
 
@@ -454,6 +382,7 @@ void SIG2A_applySettings(void)
         ipipeWb.gainGb = hn->GIFIF.New;
         ipipeWb.gainB  = hn->GIFIF.New;
         DRV_ipipeSetWb(&ipipeWb);
+        hn->GIFIF.Old = hn->GIFIF.New;
     }
 
     //offset = hn->Hmin[0] > 2047 ? 2047 : hn->Hmin[0];
@@ -496,13 +425,13 @@ int SIG_2A_config(IALG_Handle handle)
     i = 0; aewbFrames = 0; stepSize = 1;
 
     OSA_printf("SIG_2A_config: start\n");
-
+    /*
     if (gSIG_Obj.sensorFps == 25) {
         ALG_aewbSetSensor50_60Hz(1); // 25FPS
     } else {
         ALG_aewbSetSensor50_60Hz(0); // 30FPS
     }
-
+    */
     if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0) 	// AR0331 sensor
     {
         if(gFlicker == VIDEO_NTSC)			// 60 Hz flicker
@@ -677,10 +606,10 @@ int SIG_2A_config(IALG_Handle handle)
     hn->RGB[2].MaxTh = 3800;
 
     //First value of dymanic parameters
-    hn->gIRCut = 10;
-    hn->gBWMode = 10;
-    hn->IRcutOpen = 0; //IR-cut 1-open, 0 - close
-    hn->FPShigh = 0; //FPS 1-high, 0 - low
+    hn->gIRCut = gIRCut;
+    hn->gBWMode = gBWMode;
+    hn->IRcutClose = IRcutClose; //IR-cut 1-open, 0 - close
+    hn->FPShigh = FPShigh; //FPS 1-high, 0 - low
     /*
     retval = IAEWBF_SIG.control((IAEWBF_Handle)gSIG_Obj.handle_aewbf, IAEWBF_CMD_SET_CONFIG, &DP, NULL);
     if(retval == -1) {

@@ -15,13 +15,14 @@
 
 extern IAEWBF_Fxns IAEWBF_SIG_IALG;
 extern int gAePriorityMode, gBWMode, gDayNight, gIRCut, defaultFPS;
-int IRcutOpen = 1; //IR-cut 1-open, 0 - close
+int IRcutClose = 1; //IR-cut 1-open, 0 - close
 int FPShigh = 1; //FPS 1-high, 0 - low
 
 
 int up = 1, downExp = 1, wbR = 0, wbB = 0, wbS = 0, gnS = 0;
 int Rstep = 10, Bstep = 10, Rchange = 0, Bchange = 0;
-Uint32 frames = 0, wb_frames = 0, diffY = 0, WBth = 0, dec_exp = 0;
+Uint32 wb_frames = 0, diffY = 0, WBth = 0, dec_exp = 0;
+Uint32 frames = 0, frame_count = 0;
 
 #define __DEBUG
 #ifdef __DEBUG
@@ -191,7 +192,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
     //Uint32 R=0, G=0, B=0;
     Uint32  Y=0, Y1=0, ns = 3, GR[ns], GB[ns], GN[ns];
     Uint16 *box = hn->box;
-    Uint32 hsz = ALG_SENSOR_BITS;
+    Uint32 hsz = ALG_SENSOR_BITS, leave_frames = 5;
     Uint32 sum, mins, maxs, tmp, th = hn->SatTh, thh, hc = 0, min, mini;
     Uint32 hist[hsz], cn = 0;
 
@@ -202,7 +203,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
     GN[0] = 1088; GN[1] = 1024; GN[2] = 960;
 
     dprintf("frames = %d\n", frames);
-    if(!(frames%5)){
+    if(!(frames%leave_frames)){
         //Clear histogram
         memset(hist, 0, sizeof(Uint32)*hsz);
         memset(hn->RGB[0].hist, 0, sizeof(Uint32)*hsz);
@@ -259,7 +260,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         //Find half of histogram
         thh = sz3>>1;
         for(i=0; sum < thh; i++) sum += hist[i];
-        hn->Hhalf = i<<3;
+        hn->Hhalf = (i<<12)/hn->GISIF.New; //Half of histogram in real sensor value
 
         sum = 0;
         thh = hn->HmaxTh>>3;
@@ -339,7 +340,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
 
 #ifdef AE_DEBUG_PRINTS
         dprintf("Y.Min = %d Y.Max = %d Y.Diff = %d Y.Th = %d\n", hn->Y.Min, hn->Y.Max, hn->Y.Diff, hn->Y.Th);
-        dprintf("Hmin = %d Hhalf = %d Hmax = %d diff = %d\n", hn->Hmin[0], hn->Hhalf, hn->Hmax[0], (hn->Hhalf - hn->Hmin[0]));
+        dprintf("Hmin = %d Hhalf = %d Hmax = %d diff = %d\n", hn->Hmin[0], hn->Hhalf, hn->Hmax[0], hn->Hhalf*hn->GISIF.New>>9);
 #endif
 
         //AE algorithm
@@ -405,25 +406,40 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                     if(hn->Hmax[0]) hn->GISIF.New = hn->GISIF.Old*(100 + maxs)/100;
                     hn->GISIF.New = hn->GISIF.New > hn->GISIF.Range.max ? hn->GISIF.Range.max : hn->GISIF.New;
                 }
+
                 //Low light condition
-                if(hn->Exp.New == hn->Exp.Range.max && hn->GISIF.New == hn->GISIF.Range.max){
-                    //First go to low fps
-                    hn->lowlight |= 5;
-                    //Second open IR-cut filter
-                    if(hn->lowlight & 1) hn->lowlight |= 10;
-                    // IFIF Gain
-                    //if(hn->lowlight & 3) hn->gain = (3800<<9)/hn->Hmax[0];
-                }
-
                 if(gIRCut == ALG_IRCUT_AUTO){
-
+                    //Got to night mode
+                    if ( IRcutClose == 1 && hn->Hhalf < 130) {
+                        frame_count += leave_frames;
+                        if (frame_count > 100) {
+                            IRcutClose = 0;
+                            frame_count = 0;
+                        }
+                    }
+                    //Come back to day mode
+                    if ( IRcutClose == 0 && hn->Hhalf > 180) {
+                        frame_count += leave_frames;
+                        if (frame_count > 100) {
+                            IRcutClose = 1;
+                            frame_count = 0;
+                        }
+                    }
                 }
                 if(gAePriorityMode == ALG_FPS_LOW || gAePriorityMode == ALG_FPS_5FPS){
-
+                    /*
+                    if ( FPShigh == 1 && hn->Hhalf < 128) {
+                        frame_count += leave_frames;
+                        if (frame_count > 100) {
+                            FPShigh == 0;
+                            frame_count = 0;
+                        }
+                    }
+                    */
                 }
             }
 
-            //Remove gup when chnges.
+            //Remove gup when changes.
             if(hn->GISIF.New > hn->GISIF.Old){
                 hn->GIFIF.New = hn->GIFIF.Old*100/(100 + maxs);
             } else if (hn->GISIF.New < hn->GISIF.Old){

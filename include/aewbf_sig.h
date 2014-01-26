@@ -99,7 +99,7 @@ typedef struct IAEWBF_SIG_Obj {
 
     //Dynamic parametar
     int gAePriorityMode, gBWMode, gDayNight, gIRCut, defaultFPS;
-    int IRcutOpen; //IR-cut 1-open, 0 - close
+    int IRcutClose; //IR-cut 1-close, 0 - open
     int FPShigh; //FPS 1-high, 0 - low
 } IAEWBF_SIG_Obj;
 
