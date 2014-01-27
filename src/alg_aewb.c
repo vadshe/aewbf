@@ -196,7 +196,7 @@ static void ALG_SIG_config(IALG_Handle handle)
 
     DRV_imgsSetFramerate(defaultFPS); //Max FPS frame rate
     DRV_imgsSetEshutter(hn->Exp.Range.max, 0); //Max expouse
-    ALG_aewbSetSensorDcsub(170); //Offset for Aptina MT9P006
+    ALG_aewbSetSensorDcsub(170); //170 Offset for Aptina MT9P006
     //DRV_imgsNDShutterInit();
     //DRV_imgsNDShutter(1, gBWMode); //Close IR-cut
 
@@ -280,12 +280,6 @@ void SIG2A_applySettings(void)
     DRV_IpipeWb ipipeWb;
     CSL_IpipeRgb2RgbConfig rgb2rgb;
 
-    static int darkframe = 0;
-    static int frame_cnt = 0;
-    static int frame_cnt_ircut = 0;
-    //extern int gDayNight;
-    int offset, gain;
-
     OSA_printf("SIG2A_apply: gAePriorityMode = %d gBWMode = %d gDayNight =%d gIRCut = %d hn->gIRCut = %d defaultFPS = %d IRcutClose = %d hn->IRcutClose = %d FPShigh = %d hn->FPShigh = %d\n",
                gAePriorityMode, gBWMode, gDayNight, gIRCut, hn->gIRCut, defaultFPS, IRcutClose, hn->IRcutClose, FPShigh, hn->FPShigh);
 
@@ -298,34 +292,47 @@ void SIG2A_applySettings(void)
 
     //Black and color night mode dynamic change
     if(gBWMode != hn->gBWMode) {
-        if (gIRCut == ALG_IRCUT_AUTO && gIRCut == ALG_IRCUT_OPEN) {
+        if (gIRCut == ALG_IRCUT_AUTO || gIRCut == ALG_IRCUT_OPEN) {
             DRV_imgsNDShutter(gIRCut, gBWMode);
             //DRV_imgsSetBWmode(gBWMode);
         }
         hn->gBWMode = gBWMode;
     }
 
-    //Algoritm change FPS
-    if (FPShigh != hn->FPShigh) {
-        if(hn->FPShigh == 1 ){
+    //Change FPS
+    if (FPShigh != hn->FPShigh || gAePriorityMode != hn->gAePriorityMode) {
+        if(FPShigh == 0 ){
             //Go to low FPS
-            if (gAePriorityMode == ALG_FPS_LOW)         DRV_imgsSetFramerate(defaultFPS>>1);
-            else if (gAePriorityMode == ALG_FPS_5FPS)   DRV_imgsSetFramerate(5);
-            else if (gAePriorityMode == ALG_FPS_NONE)   DRV_imgsSetFramerate(defaultFPS);
+            if (gAePriorityMode == ALG_FPS_LOW) {
+                DRV_imgsSetFramerate(defaultFPS>>1);
+                hn->Exp.Range.max = 1000000/(defaultFPS>>1);
+                hn->Exp.New  = hn->Exp.Range.max;
+            }
+            else if (gAePriorityMode == ALG_FPS_5FPS){
+                DRV_imgsSetFramerate(5);
+                hn->Exp.Range.max = 200000;
+                hn->Exp.New  = hn->Exp.Range.max;
+            } else {
+                DRV_imgsSetFramerate(defaultFPS);
+                hn->Exp.Range.max = 1000000/defaultFPS;
+                hn->Exp.New  = hn->Exp.Range.max;
+            }
+            //else if (gAePriorityMode == ALG_FPS_NONE)   DRV_imgsSetFramerate(defaultFPS);
         } else {
             //Go to high FPS
             DRV_imgsSetFramerate(defaultFPS);
+            hn->Exp.Range.max = 1000000/defaultFPS;
+            hn->Exp.New  = hn->Exp.Range.max;
         }
         hn->FPShigh = FPShigh;
+        hn->gAePriorityMode = gAePriorityMode;
     }
 
-    //Algoritm change IR-cut
+    //Change IR-cut
     if (IRcutClose != hn->IRcutClose) {
         DRV_imgsNDShutter(IRcutClose, gBWMode);
-        OSA_printf("SIG2A_apply: DRV_imgsNDShutter\n");
         hn->IRcutClose = IRcutClose;
     }
-
 
     //Seting Expouse
     if(hn->Exp.New != hn->Exp.Old) {
@@ -340,17 +347,15 @@ void SIG2A_applySettings(void)
         hn->RGBgain[2] = hn->GISIF.New*hn->RGBgain[2]/hn->GISIF.Old;
         hn->GISIF.Old = hn->GISIF.New;
         //OSA_printf("SIG2A_applySettings: new = %d old = %d Rgain = %d Ggain = %d Bgain = %d\n",
-        //           hn->Gain.New, hn->Gain.Old, hn->RGBgain[0], hn->RGBgain[1], hn->RGBgain[2]);
-        //DRV_isifSetDgain(hn->RGBgain[1] , hn->RGBgain[0], hn->RGBgain[2], hn->RGBgain[1], 0);
+        //           hn->GISIF.New, hn->GISIF.Old, hn->RGBgain[0], hn->RGBgain[1], hn->RGBgain[2]);
     }
     DRV_isifSetDgain(hn->RGBgain[1] , hn->RGBgain[0], hn->RGBgain[2], hn->RGBgain[1], 0);
 
     if(hn->Offset.New != hn->Offset.Old) {
         //ALG_aewbSetSensorDcsub(hn->Offset.New);
-        ALG_aewbSetSensorDcsub(170);
+        //ALG_aewbSetSensorDcsub(170);
         hn->Offset.Old = hn->Offset.New;
     }
-
 
     //DRV_isifSetDgain(512, 512, 512, 512, 0);
     //gain = hn->Gain.New - hn->RGBgain[hn->maxi];
@@ -549,8 +554,8 @@ int SIG_2A_config(IALG_Handle handle)
 
     //ISIF gain setup
     hn->GISIF.Step = 16;
-    hn->GISIF.Old = 512;
-    hn->GISIF.New = 511;
+    hn->GISIF.Old = 511;
+    hn->GISIF.New = 512;
     hn->GISIF.Max = 512;
     hn->GISIF.Min = 512;
     hn->GISIF.Range.min = 100;
@@ -560,8 +565,8 @@ int SIG_2A_config(IALG_Handle handle)
 
     //IFIF gain setup
     hn->GIFIF.Step = 16;
-    hn->GIFIF.Old = 512;
-    hn->GIFIF.New = 511;
+    hn->GIFIF.Old = 511;
+    hn->GIFIF.New = 512;
     hn->GIFIF.Max = 512;
     hn->GIFIF.Min = 512;
     hn->GIFIF.Range.min = 512;
@@ -606,6 +611,7 @@ int SIG_2A_config(IALG_Handle handle)
     hn->RGB[2].MaxTh = 3800;
 
     //First value of dymanic parameters
+    hn->gAePriorityMode = gAePriorityMode;
     hn->gIRCut = gIRCut;
     hn->gBWMode = gBWMode;
     hn->IRcutClose = IRcutClose; //IR-cut 1-open, 0 - close

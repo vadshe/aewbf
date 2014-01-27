@@ -19,7 +19,7 @@ int IRcutClose = 1; //IR-cut 1-open, 0 - close
 int FPShigh = 1; //FPS 1-high, 0 - low
 
 
-int up = 1, downExp = 1, wbR = 0, wbB = 0, wbS = 0, gnS = 0;
+int up = 1, down = 1, wbR = 0, wbB = 0, wbS = 0, gnS = 0;
 int Rstep = 10, Bstep = 10, Rchange = 0, Bchange = 0;
 Uint32 wb_frames = 0, diffY = 0, WBth = 0, dec_exp = 0;
 Uint32 frames = 0, frame_count = 0;
@@ -155,34 +155,7 @@ Int IAEWBF_SIG_init(IALG_Handle handle,
 
 XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWBF_OutArgs *outArgs)
 {
-    //int width = inArgs->statMat.winCtHorz;
-    //int height = inArgs->statMat.winCtVert;
-    int numPixels = 56;
-    unsigned int redSum = 0;
-    unsigned int blueSum = 0;
-    unsigned int greenSum = 0;
-    unsigned int redSum_unsat = 0;
-    unsigned int blueSum_unsat = 0;
-    unsigned int greenSum_unsat = 0;
-    unsigned int totalY, totalY_unsat;
-    unsigned int avgY;
-    unsigned int weightSum = 0;
-    unsigned int weightSum_unsat = 0;
-    unsigned int rY, bY, gY;
-    //unsigned int newExp = inArgs->curAe.exposureTime;
-    int newExpStep = 0;
-    unsigned int newSensorGain = inArgs->curAe.sensorGain;
-    //unsigned int newApertureLevel = inArgs->curAe.apertureLevel;
-    unsigned int newIpipeGain = inArgs->curAe.ipipeGain;
-    unsigned int curY, curY_unsat, curY_sat;
-    IAEWBF_SIG_Obj *hn = (IAEWBF_SIG_Obj *)handle;
-    long long  adjRatio;
-    unsigned int y, max_y = 0, min_y = 255 * numPixels;
-    unsigned int temp;
-    int pixelY = 0;
-    int cnt_light = 0;
-    int hdr_enable = 0;
-    //unsigned int newExp = hn->Exp;
+     IAEWBF_SIG_Obj *hn = (IAEWBF_SIG_Obj *)handle;
 
 
     int i, i1, i2, j;
@@ -193,7 +166,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
     Uint32  Y=0, Y1=0, ns = 3, GR[ns], GB[ns], GN[ns];
     Uint16 *box = hn->box;
     Uint32 hsz = ALG_SENSOR_BITS, leave_frames = 5;
-    Uint32 sum, mins, maxs, tmp, th = hn->SatTh, thh, hc = 0, min, mini;
+    Uint32 sum, mins, minr, minb, maxs, tmp, th = hn->SatTh, thh, hc = 0, min, mini;
     Uint32 hist[hsz], cn = 0;
 
     //GN[0] = 1536; GN[1] = 1280; GN[2] = 1024; GN[3] = 768; GN[4] = 512;
@@ -267,14 +240,6 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         for(i=hsz-1; sum < hn->SatTh; i--) sum += hist[i];
         hn->Hmax[0] = i<<3; hn->Hmax[1] = sum;
 
-        /*
-        for(j=hsz-1; j > thh; j--) sum += hist[j];
-        if(!sum){
-            for(i=j; sum < th; i--) sum += hist[i];
-            hn->Hmax[0] = i<<3; hn->Hmax[1] = 1;
-        } else { hn->Hmax[0] = hn->HmaxTh; hn->Hmax[1] = sum; }
-        */
-
 
         //Find max and min in histogram
         for(j=0; j < 3; j++){
@@ -308,30 +273,39 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         dprintf("Bmin = %u Bmins = %u Bmax = %u Bmaxs = %u  \n", hn->RGB[2].min, hn->RGB[2].mins, hn->RGB[2].max, hn->RGB[2].maxs);
 #endif
         //White balance algorithm
-        min = GR[0]; mini = 0;
-        for(j=1; j < ns; j++){
-            if(GR[j] < min) { min = GR[j]; mini = j; }
-        }
-        if(mini != 1){
-            hn->RGBgain[0] = hn->RGBgain[0]*GN[mini]>>10;
-            hn->RGBgain[0] = hn->RGBgain[0] > hn->GISIF.Range.max ? hn->GISIF.Range.max : hn->RGBgain[0];
-            hn->RGBgain[0] = hn->RGBgain[0] < hn->GISIF.Range.min ? hn->GISIF.Range.min : hn->RGBgain[0];
+        //if(!down) {
+        if(1) {
+            min = GR[0]; minr = 0;
+            for(j=1; j < ns; j++){
+                if(GR[j] < min) { min = GR[j]; minr = j; }
+            }
+            min = GB[0]; minb = 0;
+            for(j=1; j < ns; j++){
+                if(GB[j] < min) { min = GB[j]; minb = j; }
+            }
 
-            dprintf("mini = %d GN[mini] = %d hn->RGBgain[0] = %d \n", mini, GN[mini], hn->RGBgain[0]);
-        }
+            if(minr == 2 && minb == 2 && hn->RGBgain[1] < hn->GISIF.Range.max){
+                //Gain up for Green color
+                hn->RGBgain[1] = hn->RGBgain[1]*GN[0]>>10;
+                hn->RGBgain[1] = hn->RGBgain[1] > hn->GISIF.Range.max ? hn->GISIF.Range.max : hn->RGBgain[1];
+                hn->RGBgain[1] = hn->RGBgain[1] < hn->GISIF.Range.min ? hn->GISIF.Range.min : hn->RGBgain[1];
+                dprintf("Green up: hn->RGBgain[1] = %d \n", hn->RGBgain[1]);
 
-        min = GB[0]; mini = 0;
-        for(j=1; j < ns; j++){
-            if(GB[j] < min) { min = GB[j]; mini = j; }
+            } else {
+                if(minr != 1){
+                    hn->RGBgain[0] = hn->RGBgain[0]*GN[minr]>>10;
+                    hn->RGBgain[0] = hn->RGBgain[0] > hn->GISIF.Range.max ? hn->GISIF.Range.max : hn->RGBgain[0];
+                    hn->RGBgain[0] = hn->RGBgain[0] < hn->GISIF.Range.min ? hn->GISIF.Range.min : hn->RGBgain[0];
+                    dprintf("mini = %d GN[mini] = %d hn->RGBgain[0] = %d \n", minr, GN[minr], hn->RGBgain[0]);
+                }
+                if(minb != 1){
+                    hn->RGBgain[2] = hn->RGBgain[2]*GN[minb]>>10;
+                    hn->RGBgain[2] = hn->RGBgain[2] > hn->GISIF.Range.max ? hn->GISIF.Range.max : hn->RGBgain[2];
+                    hn->RGBgain[2] = hn->RGBgain[2] < hn->GISIF.Range.min ? hn->GISIF.Range.min : hn->RGBgain[2];
+                    dprintf("mini = %d GN[mini] = %d hn->RGBgain[2] = %d \n", minb, GN[minb], hn->RGBgain[2]);
+                }
+            }
         }
-        if(mini != 1){
-            hn->RGBgain[2] = hn->RGBgain[2]*GN[mini]>>10;
-            hn->RGBgain[2] = hn->RGBgain[2] > hn->GISIF.Range.max ? hn->GISIF.Range.max : hn->RGBgain[2];
-            hn->RGBgain[2] = hn->RGBgain[2] < hn->GISIF.Range.min ? hn->GISIF.Range.min : hn->RGBgain[2];
-
-            dprintf("mini = %d GN[mini] = %d hn->RGBgain[2] = %d \n", mini, GN[mini], hn->RGBgain[2]);
-        }
-
 
         //Check Y history of difference
         if(Y > hn->Y.Max) hn->Y.Max = Y;
@@ -341,12 +315,13 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
 #ifdef AE_DEBUG_PRINTS
         dprintf("Y.Min = %d Y.Max = %d Y.Diff = %d Y.Th = %d\n", hn->Y.Min, hn->Y.Max, hn->Y.Diff, hn->Y.Th);
         dprintf("Hmin = %d Hhalf = %d Hmax = %d diff = %d\n", hn->Hmin[0], hn->Hhalf, hn->Hmax[0], hn->Hhalf*hn->GISIF.New>>9);
+        dprintf("gain = %d Rgain = %d Ggain = %d Bgain = %d\n", hn->GISIF.New, hn->RGBgain[0], hn->RGBgain[1],  hn->RGBgain[2]);
 #endif
 
         //AE algorithm
         //if(!wbS && !wbR && !wbB) {
-            //Offset
-            /*
+        //Offset
+        /*
             if(hn->Hmin[0] != 0){
                 //Increase offset
                 hn->Offset.New = hn->Offset.Old + hn->Hmin[0]*512/hn->Gain.Old;
@@ -357,109 +332,122 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                 }
             }
             */
-            //Expouse and gain
-            //if(hn->Hmax[1] > hn->SatTh || hn->RGB[0].maxs > hn->SatTh || hn->RGB[1].maxs > hn->SatTh || hn->RGB[2].maxs > hn->SatTh){
-            if(hn->RGB[0].maxs > hn->SatTh || hn->RGB[1].maxs > hn->SatTh || hn->RGB[2].maxs > hn->SatTh){
-                dprintf("DOWN!!!!!!!!!!!!!!!!!\n");
-                //Find max step
-                //mins = ((sz3 - hn->Hmax[1])<<10)/sz3;
-                mins = ((sz - hn->RGB[0].maxs)<<10)/sz;
-                for(j=1; j < 3; j++) {
-                    tmp = ((sz - hn->RGB[j].maxs)<<10)/sz;
-                    mins = tmp < mins ? tmp : mins;
-                }
-                dprintf("mins = %d g = %f \n", mins, (float)mins/1024.);
 
-                if(hn->GISIF.Old  > 512){
-                    //Decrease gain at first
-                    //hn->Gain.New = hn->Gain.Old*(hv-hn->Hmax[1])/hv;
-                    hn->GISIF.New = hn->GISIF.Old*mins>>10;
-                    if(hn->GISIF.New < 512) hn->GISIF.New = 512;
-                } else {
-                    //Decrease expouse at second
-                    //hn->Exp.New = hn->Exp.Old*(hv-hn->Hmax[1])/hv;
-                    hn->Exp.New = hn->Exp.Old*mins>>10;
-                    if(hn->Exp.New < hn->Exp.Range.min)  hn->Exp.New = hn->Exp.Range.min;
-                }
-                hn->Y.Diff = 0;
-                hn->Y.Max = Y;
-                hn->Y.Min = Y;
-                up = 0;
+        //Check the low light mode
 
-            } else if (hn->Y.Diff > hn->Y.Th || up){
-                dprintf("UP!!!!!!!!!!!!!!!!!\n");
-                //Check max
-                maxs = hn->Y.Diff > hn->Y.Th ? hn->Y.Diff : hn->Y.Th;
-                //maxs = hn->Y.Th;
-                //Increase expouse at first
-                if(hn->Exp.Old < hn->Exp.Range.max ) {
-                    //hn->Exp.New = hn->Exp.Old*hn->HmaxTh/hn->Hmax[0];
-                    hn->Exp.New = hn->Exp.Old*(100 + maxs)/100;
-                    if(hn->Exp.New > hn->Exp.Range.max){
-                        hn->Exp.New = hn->Exp.Range.max;
-                        //wbS = 1;
-                    }
-                } else {
-                    //Increase gain at second
-                    //hn->maxi = hn->RGBgain[0] > hn->RGBgain[2] ? 0 : 2;
-                    //hn->maxi = hn->RGBgain[hn->maxi] > hn->RGBgain[1] ? hn->maxi : 1;
-                    if(hn->Hmax[0]) hn->GISIF.New = hn->GISIF.Old*(100 + maxs)/100;
-                    hn->GISIF.New = hn->GISIF.New > hn->GISIF.Range.max ? hn->GISIF.Range.max : hn->GISIF.New;
-                }
-
-                //Low light condition
-                if(gIRCut == ALG_IRCUT_AUTO){
-                    //Got to night mode
-                    if ( IRcutClose == 1 && hn->Hhalf < 130) {
-                        frame_count += leave_frames;
-                        if (frame_count > 100) {
-                            IRcutClose = 0;
-                            frame_count = 0;
-                        }
-                    }
-                    //Come back to day mode
-                    if ( IRcutClose == 0 && hn->Hhalf > 180) {
-                        frame_count += leave_frames;
-                        if (frame_count > 100) {
-                            IRcutClose = 1;
-                            frame_count = 0;
-                        }
-                    }
-                }
-                if(gAePriorityMode == ALG_FPS_LOW || gAePriorityMode == ALG_FPS_5FPS){
-                    /*
-                    if ( FPShigh == 1 && hn->Hhalf < 128) {
-                        frame_count += leave_frames;
-                        if (frame_count > 100) {
-                            FPShigh == 0;
-                            frame_count = 0;
-                        }
-                    }
-                    */
-                }
+        //Expouse and gain
+        if(hn->RGB[0].maxs > hn->SatTh || hn->RGB[1].maxs > hn->SatTh || hn->RGB[2].maxs > hn->SatTh){
+            dprintf("DOWN!!!!!!!!!!!!!!!!!\n");
+            //Find max step
+            //mins = ((sz3 - hn->Hmax[1])<<10)/sz3;
+            mins = ((sz - hn->RGB[0].maxs)<<10)/sz;
+            for(j=1; j < 3; j++) {
+                tmp = ((sz - hn->RGB[j].maxs)<<10)/sz;
+                mins = tmp < mins ? tmp : mins;
             }
+            mins = mins < 512 ? 512 : mins;
 
-            //Remove gup when changes.
-            if(hn->GISIF.New > hn->GISIF.Old){
-                hn->GIFIF.New = hn->GIFIF.Old*100/(100 + maxs);
-            } else if (hn->GISIF.New < hn->GISIF.Old){
-                hn->GIFIF.New = hn->GIFIF.Old<<10/mins;
+            dprintf("mins = %d g = %f \n", mins, (float)mins/1024.);
+
+            if(hn->GISIF.Old  > 512){
+                //Decrease gain at first
+                //hn->Gain.New = hn->Gain.Old*(hv-hn->Hmax[1])/hv;
+                hn->GISIF.New = hn->GISIF.Old*mins>>10;
+                if(hn->GISIF.New < 512) hn->GISIF.New = 512;
             } else {
-                hn->GIFIF.New = (3800<<9)/hn->Hmax[0];
+                //Decrease expouse at second
+                //hn->Exp.New = hn->Exp.Old*(hv-hn->Hmax[1])/hv;
+                hn->Exp.New = hn->Exp.Old*mins>>10;
+                if(hn->Exp.New < hn->Exp.Range.min)  hn->Exp.New = hn->Exp.Range.min;
             }
-            hn->GIFIF.New = hn->GIFIF.New >  hn->GIFIF.Range.max ? hn->GIFIF.Range.max : hn->GIFIF.New;
-            hn->GIFIF.New = hn->GIFIF.New <  hn->GIFIF.Range.min ? hn->GIFIF.Range.min : hn->GIFIF.New;
+            hn->Y.Diff = 0;
+            hn->Y.Max = Y;
+            hn->Y.Min = Y;
+            up = 0;
+            down = 1;
 
-            dprintf("lowlight = %d gain = %d\n", hn->lowlight, hn->GIFIF.New);
+        } else if (hn->Y.Diff > hn->Y.Th || up){
+            dprintf("UP!!!!!!!!!!!!!!!!!\n");
+            //Check max
+            maxs = hn->Y.Diff > hn->Y.Th ? hn->Y.Diff : hn->Y.Th;
+            //maxs = hn->Y.Th;
+            //Increase expouse at first
+            if(hn->Exp.Old < hn->Exp.Range.max ) {
+                //hn->Exp.New = hn->Exp.Old*hn->HmaxTh/hn->Hmax[0];
+                hn->Exp.New = hn->Exp.Old*(100 + maxs)/100;
+                if(hn->Exp.New > hn->Exp.Range.max){
+                    hn->Exp.New = hn->Exp.Range.max;
+                    //wbS = 1;
+                }
+            } else {
+                //Increase gain at second
+                //hn->maxi = hn->RGBgain[0] > hn->RGBgain[2] ? 0 : 2;
+                //hn->maxi = hn->RGBgain[hn->maxi] > hn->RGBgain[1] ? hn->maxi : 1;
+                if(hn->Hmax[0]) hn->GISIF.New = hn->GISIF.Old*(100 + maxs)/100;
+                hn->GISIF.New = hn->GISIF.New > hn->GISIF.Range.max ? hn->GISIF.Range.max : hn->GISIF.New;
+            }
+            down = 0;
+        } else down = 0;
+
+        //Low light condition
+        //First down fps
+        //if(gAePriorityMode == ALG_FPS_LOW || gAePriorityMode == ALG_FPS_5FPS){
+        if ( FPShigh == 1 && IRcutClose == 1 && hn->Hhalf < 150) {
+            frame_count += leave_frames;
+            if (frame_count > 100) {
+                FPShigh = 0;
+                frame_count = 0;
+            }
+        }
+        if ( FPShigh == 0 && IRcutClose == 1 && hn->Hhalf > 200) {
+            frame_count += leave_frames;
+            if (frame_count > 100) {
+                FPShigh = 0;
+                frame_count = 0;
+            }
+        }
+        //}
+
+        //Second open IR-cut
+        if(gIRCut == ALG_IRCUT_AUTO){
+            //Got to night mode
+            if ( FPShigh == 0 && IRcutClose == 1 && hn->Hhalf < 130) {
+                frame_count += leave_frames;
+                if (frame_count > 100) {
+                    IRcutClose = 0;
+                    frame_count = 0;
+                }
+            }
+            //Come back to day mode
+            if ( FPShigh == 0 && IRcutClose == 0 && hn->Hhalf > 180) {
+                frame_count += leave_frames;
+                if (frame_count > 100) {
+                    IRcutClose = 1;
+                    frame_count = 0;
+                }
+            }
+        }
+
+        //Remove gup when changes.
+        if(hn->GISIF.New > hn->GISIF.Old){
+            hn->GIFIF.New = hn->GIFIF.Old*100/(100 + maxs);
+        } else if (hn->GISIF.New < hn->GISIF.Old){
+            hn->GIFIF.New = hn->GIFIF.Old<<10/mins;
+        } else {
+            hn->GIFIF.New = (3800<<9)/hn->Hmax[0];
+        }
+        hn->GIFIF.New = hn->GIFIF.New >  hn->GIFIF.Range.max ? hn->GIFIF.Range.max : hn->GIFIF.New;
+        hn->GIFIF.New = hn->GIFIF.New <  hn->GIFIF.Range.min ? hn->GIFIF.Range.min : hn->GIFIF.New;
+
+        dprintf("lowlight = %d gain = %d\n", hn->lowlight, hn->GIFIF.New);
 
         //}
 
 
 #ifdef AE_DEBUG_PRINTS
-        dprintf("up = %d downExp = %d wbR = %d wbB = %d wbS = %d gnS = %d dec_exp = %d\n", up, downExp, wbR, wbB, wbS, gnS, dec_exp);
+        dprintf("up = %d down = %d wbR = %d wbB = %d wbS = %d gnS = %d dec_exp = %d\n", up, down, wbR, wbB, wbS, gnS, dec_exp);
         dprintf("Exp.Old = %d Exp.New = %d Offset.Old = %d Offset.New = %d\n",
                 hn->Exp.Old, hn->Exp.New, hn->Offset.Old, hn->Offset.New);
-        dprintf("gain = %d Rgain = %d Ggain = %d Bgain = %d\n", hn->GISIF.New, hn->RGBgain[0], hn->RGBgain[1],  hn->RGBgain[2]);
 #endif
 
         //Setup ipipe gains and offset
