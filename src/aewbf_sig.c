@@ -365,7 +365,6 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             hn->Y.Min = Y;
             up = 0;
             down = 1;
-
         } else if (hn->Y.Diff > hn->Y.Th || up){
             dprintf("UP!!!!!!!!!!!!!!!!!\n");
             //Check max
@@ -392,17 +391,17 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         //Low light condition
         //First down fps
         //if(gAePriorityMode == ALG_FPS_LOW || gAePriorityMode == ALG_FPS_5FPS){
-        if ( FPShigh == 1 && IRcutClose == 1 && hn->Hhalf < 150) {
+        if ( FPShigh == 1 && IRcutClose == 1 && hn->Hhalf < 130) {
             frame_count += leave_frames;
             if (frame_count > 100) {
                 FPShigh = 0;
                 frame_count = 0;
             }
         }
-        if ( FPShigh == 0 && IRcutClose == 1 && hn->Hhalf > 200) {
+        if ( FPShigh == 0 && IRcutClose == 1 && hn->Hhalf > 250) {
             frame_count += leave_frames;
             if (frame_count > 100) {
-                FPShigh = 0;
+                FPShigh = 1;
                 frame_count = 0;
             }
         }
@@ -419,7 +418,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                 }
             }
             //Come back to day mode
-            if ( FPShigh == 0 && IRcutClose == 0 && hn->Hhalf > 180) {
+            if ( FPShigh == 0 && IRcutClose == 0 && hn->Hhalf > 200) {
                 frame_count += leave_frames;
                 if (frame_count > 100) {
                     IRcutClose = 1;
@@ -434,12 +433,13 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         } else if (hn->GISIF.New < hn->GISIF.Old){
             hn->GIFIF.New = hn->GIFIF.Old<<10/mins;
         } else {
-            hn->GIFIF.New = (3800<<9)/hn->Hmax[0];
+            hn->GIFIF.New = (3600<<9)/hn->Hmax[0];
         }
         hn->GIFIF.New = hn->GIFIF.New >  hn->GIFIF.Range.max ? hn->GIFIF.Range.max : hn->GIFIF.New;
         hn->GIFIF.New = hn->GIFIF.New <  hn->GIFIF.Range.min ? hn->GIFIF.Range.min : hn->GIFIF.New;
 
-        dprintf("lowlight = %d gain = %d\n", hn->lowlight, hn->GIFIF.New);
+
+        dprintf("gain = %d\n", hn->GIFIF.New);
 
         //}
 
@@ -461,16 +461,17 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         //maxg = maxg > hn->RGBgain[1] ? maxg : hn->RGBgain[1];
 
 
-        int dm = 512, p[dm+1], d, a, b, hmax, hmin;
+        int k, dm = 512, p[dm+1], d, a, b, hmax, hmin;
         int  vl0, vl1, st, sum1, step, lp;
         //Tone mapping
 
         hmax = hn->Hmax[0]>>3;
         hmin = hn->Hmin[0]>>3;
-        d = hmax - hmin;
+        //d = hmax - hmin;
+        d = 512;
         a = (1<<16)/d, b = (1<<17)/sz;
 
-        dprintf("Hmin = %d Hmax = %d d = %d \n", hmin, hmax, d);
+        //dprintf("Hmin = %d Hmax = %d d = %d \n", hmin, hmax, d);
         //Linear
         //for(i=0; i < hmin; i++) p[i] = 0;
         //for(i = hmin; i < hmax; i++) p[i] = ((i - hmin)<<10)*a>>16;
@@ -481,47 +482,65 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         for(j=0; j < 3; j++){
             sum = 0;
             for(i=0; i < hsz; i++) {
-                sum += hn->RGB[j].hist[i];
-                hn->RGB[j].hist[i] = sum*b>>7;
+                //sum += hn->RGB[j].hist[i];
+                //hn->RGB[j].hist[i] = sum*b>>7;
             }
-        }
 
-        for(j=0; j < 3; j++){
             hn->RGB[j].hist[0] = 0;
             vl0 = 0;
             for(i=1; i < dm; i++){
-                vl1 = hn->RGB[j].hist[i];
-                //vl1 = i<<1;
+                //vl1 = (hn->RGB[j].hist[i] + (i<<1))>>1;
+                vl1 = i<<1;
                 //hn->lut[i] = (vl0<<10) | (vl1 - vl0);
                 hn->RGB[j].hist[i] = (vl0<<10) | (vl1 - vl0);
                 //if(j==1) dprintf("%d  hist = %d  %d  %d\n", i, hn->RGBh[j][i], vl0, (vl1 - vl0));
                 vl0 = vl1;
             }
         }
+
         /*
-        for(st=1; st < 9; st++, d>>=1){
-            for(j=0; j < dm; j+=d){
-                for(i=p[j], sum1=0; i < p[j+d]; i++) sum1 += hist[i];
-                //Remove holes from histogramm
-                //sp = sum1/d;
-                //for(i=p[j]; i < p[j+d]; i++) if(hist[i] > sp) { hist[i] = sp; sum1 -= (sp-hist[i]); }
+        for(k=0; k < 3; k++){
+            p[0] = 0; p[dm] = dm-1;
+            for(st=1, d = dm; st < 10; st++, d>>=1){
+                for(j=0; j < dm; j+=d){
+                    for(i=p[j], sum1=0; i < p[j+d]; i++) sum1 += hn->RGB[k].hist[i];
+                    //Remove holes from histogramm
+                    //sp = sum1/d;
+                    //for(i=p[j]; i < p[j+d]; i++) if(hist[i] > sp) { hist[i] = sp; sum1 -= (sp-hist[i]); }
 
-                sum1>>=1;
-                for(i=p[j], sum=0; sum < sum1; i++){
-                    sum += hist[i];
-                    //printf("i = %d sum = %d\n", i, sum);
+                    sum1>>=1;
+                    for(i=p[j], sum=0; sum < sum1; i++){
+                        sum += hn->RGB[k].hist[i];
+                        //printf("i = %d sum = %d\n", i, sum);
+                    }
+                    lp = (p[j+d] + p[j])>>1;
+                    p[j+(d>>1)] = (i + lp)>>1;
+                    //p[j+(d>>1)] = i;
+                    //p[j+(d>>1)] = lp;
+
+                    //printf("size = %d st = %d d = %d j = %d lp = %d ip = %d p[%d] = %d p[%d] = %d p[%d] = %d\n",
+                    //       size3>>st, st, d, j, lp, i, j+d, p[j+d], j, p[j], j+(d>>1), p[j+(d>>1)]);
                 }
-                lp = (p[j+d] + p[j])>>1;
-                //p[j+(d>>1)] = lp + (i - lp)>>1;
-                p[j+(d>>1)] = i;
-
-                //printf("size = %d st = %d d = %d j = %d lp = %d ip = %d p[%d] = %d p[%d] = %d p[%d] = %d\n",
-                //       size3>>st, st, d, j, lp, i, j+d, p[j+d], j, p[j], j+(d>>1), p[j+(d>>1)]);
             }
-        }
-        //for(i = 0; i <= 256; i++) printf("p[%d] = %d\n", i, p[i]);
-        */
 
+            //for(i = 0; i <= 512; i++) printf("%d  hist = %d p = %d\n", i, hn->RGB[k].hist[i], p[i]);
+            int n = 0;
+            hn->RGB[k].hist[0] = 0;
+            vl0 = p[0];
+            for(i=0; i < dm; i++){
+                vl1 = p[i+1]<<1;
+                //hn->lut[i] = (vl0<<10) | (vl1 - vl0);
+                for(j=p[i]; j < p[i+1]; j++){
+                    hn->RGB[k].hist[j] = (vl0<<10) | (vl1 - vl0);
+                    //n++;
+                    //dprintf("%d  vl0 = %d \n", n, vl0);
+                 }
+                //hn->RGB[k].hist[i] = (vl0<<10) | (vl1 - vl0);
+                vl0 = vl1;
+            }
+            hn->RGB[k].hist[511] = 1023;
+        }
+        */
         //hn->R = R; hn->G = G; hn->B = B;
         hn->Y.New = Y;
         for(j=0; j < ns; j++) { hn->GR[j] = GR[j]; hn->GB[j] = GB[j]; }

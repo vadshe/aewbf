@@ -334,6 +334,21 @@ void SIG2A_applySettings(void)
         hn->IRcutClose = IRcutClose;
     }
 
+    //Config gamma correction tables
+    if(hn->GISIF.New != hn->GISIF.Old || hn->Exp.New != hn->Exp.Old){
+        dataG.tableSize = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SIZE_512;
+        dataG.tableSrc  = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SELECT_RAM;
+        dataG.bypassR = 0;
+        dataG.bypassG = 0;
+        dataG.bypassB = 0;
+        dataG.tableR = hn->RGB[0].hist;
+        dataG.tableG = hn->RGB[1].hist;
+        dataG.tableB = hn->RGB[2].hist;
+        //Setup gamma tables
+        if(CSL_ipipeSetGammaConfig(&gCSL_ipipeHndl, &dataG) != CSL_SOK)
+            OSA_ERROR("Fail CSL_ipipeSetGammaConfig!!!\n");
+    }
+
     //Seting Expouse
     if(hn->Exp.New != hn->Exp.Old) {
         DRV_imgsSetEshutter(hn->Exp.New, 0);
@@ -363,20 +378,6 @@ void SIG2A_applySettings(void)
     //gain = hn->Gain.New - hn->RGBgain[hn->maxi];
 
 
-    //Config gamma correction tables
-    /*
-    dataG.tableSize = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SIZE_512;
-    dataG.tableSrc  = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SELECT_RAM;
-    dataG.bypassR = 0;
-    dataG.bypassG = 0;
-    dataG.bypassB = 0;
-    dataG.tableR = hn->RGB[0].hist;
-    dataG.tableG = hn->RGB[1].hist;
-    dataG.tableB = hn->RGB[2].hist;
-    //Setup gamma tables
-    if(CSL_ipipeSetGammaConfig(&gCSL_ipipeHndl, &dataG) != CSL_SOK)
-        OSA_ERROR("Fail CSL_ipipeSetGammaConfig!!!\n");
-        */
 
 
     //gain = (4000<<9)/(hn->Hmax[0] - hn->Hmin[0]);
@@ -606,9 +607,9 @@ int SIG_2A_config(IALG_Handle handle)
     hn->HhalfTh = 100;
     hn->Hhalf = 0;
 
-    hn->RGB[0].MaxTh = 3800;
-    hn->RGB[1].MaxTh = 3800;
-    hn->RGB[2].MaxTh = 3800;
+    hn->RGB[0].MaxTh = 3700;
+    hn->RGB[1].MaxTh = 3700;
+    hn->RGB[2].MaxTh = 3700;
 
     //First value of dymanic parameters
     hn->gAePriorityMode = gAePriorityMode;
