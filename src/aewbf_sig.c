@@ -284,27 +284,34 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                 if(GB[j] < min) { min = GB[j]; minb = j; }
             }
 
-            if(minr == 2 && minb == 2 && hn->RGBgain[1] < hn->GISIF.Range.max){
-                //Gain up for Green color
+            if (minr == 0 && hn->RGBgain[0] == hn->GISIF.Range.max){
+                hn->RGBgain[1] = hn->RGBgain[1]*GN[2]>>10;
+                hn->RGBgain[2] = hn->RGBgain[2]*GN[2]>>10;
+            } else if (minb == 0 && hn->RGBgain[1] == hn->GISIF.Range.max){
+                hn->RGBgain[0] = hn->RGBgain[0]*GN[2]>>10;
+                hn->RGBgain[2] = hn->RGBgain[2]*GN[2]>>10;
+            } else if (minb == 0 && hn->RGBgain[2] == hn->GISIF.Range.max){
+                hn->RGBgain[0] = hn->RGBgain[0]*GN[2]>>10;
+                hn->RGBgain[1] = hn->RGBgain[1]*GN[2]>>10;
+            } else if(minr == 2 && minb == 2 && hn->RGBgain[1] < hn->GISIF.Range.max){
+                //Gain up for Green color for Aptina non liniar sensor
                 hn->RGBgain[1] = hn->RGBgain[1]*GN[0]>>10;
-                hn->RGBgain[1] = hn->RGBgain[1] > hn->GISIF.Range.max ? hn->GISIF.Range.max : hn->RGBgain[1];
-                hn->RGBgain[1] = hn->RGBgain[1] < hn->GISIF.Range.min ? hn->GISIF.Range.min : hn->RGBgain[1];
-                dprintf("Green up: hn->RGBgain[1] = %d \n", hn->RGBgain[1]);
-
             } else {
                 if(minr != 1){
                     hn->RGBgain[0] = hn->RGBgain[0]*GN[minr]>>10;
-                    hn->RGBgain[0] = hn->RGBgain[0] > hn->GISIF.Range.max ? hn->GISIF.Range.max : hn->RGBgain[0];
-                    hn->RGBgain[0] = hn->RGBgain[0] < hn->GISIF.Range.min ? hn->GISIF.Range.min : hn->RGBgain[0];
-                    dprintf("mini = %d GN[mini] = %d hn->RGBgain[0] = %d \n", minr, GN[minr], hn->RGBgain[0]);
+                     dprintf("mini = %d GN[mini] = %d hn->RGBgain[0] = %d \n", minr, GN[minr], hn->RGBgain[0]);
                 }
                 if(minb != 1){
                     hn->RGBgain[2] = hn->RGBgain[2]*GN[minb]>>10;
-                    hn->RGBgain[2] = hn->RGBgain[2] > hn->GISIF.Range.max ? hn->GISIF.Range.max : hn->RGBgain[2];
-                    hn->RGBgain[2] = hn->RGBgain[2] < hn->GISIF.Range.min ? hn->GISIF.Range.min : hn->RGBgain[2];
                     dprintf("mini = %d GN[mini] = %d hn->RGBgain[2] = %d \n", minb, GN[minb], hn->RGBgain[2]);
                 }
             }
+            //Check maximum and minimum
+            hn->RGBgain[0] = hn->RGBgain[0] > hn->GISIF.Range.max ? hn->GISIF.Range.max : hn->RGBgain[0];
+            hn->RGBgain[0] = hn->RGBgain[0] < hn->GISIF.Range.min ? hn->GISIF.Range.min : hn->RGBgain[0];
+            hn->RGBgain[2] = hn->RGBgain[2] > hn->GISIF.Range.max ? hn->GISIF.Range.max : hn->RGBgain[2];
+            hn->RGBgain[2] = hn->RGBgain[2] < hn->GISIF.Range.min ? hn->GISIF.Range.min : hn->RGBgain[2];
+
         }
 
         //Check Y history of difference
@@ -368,8 +375,8 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         } else if (hn->Y.Diff > hn->Y.Th || up){
             dprintf("UP!!!!!!!!!!!!!!!!!\n");
             //Check max
-            maxs = hn->Y.Diff > hn->Y.Th ? hn->Y.Diff : hn->Y.Th;
-            //maxs = hn->Y.Th;
+            //maxs = hn->Y.Diff > hn->Y.Th ? hn->Y.Diff : hn->Y.Th;
+            maxs = hn->Y.Th;
             //Increase expouse at first
             if(hn->Exp.Old < hn->Exp.Range.max ) {
                 //hn->Exp.New = hn->Exp.Old*hn->HmaxTh/hn->Hmax[0];
@@ -480,12 +487,13 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         //Integral
 
         for(j=0; j < 3; j++){
+            /*
             sum = 0;
             for(i=0; i < hsz; i++) {
-                //sum += hn->RGB[j].hist[i];
-                //hn->RGB[j].hist[i] = sum*b>>7;
+                sum += hn->RGB[j].hist[i];
+                hn->RGB[j].hist[i] = sum*b>>7;
             }
-
+            */
             hn->RGB[j].hist[0] = 0;
             vl0 = 0;
             for(i=1; i < dm; i++){

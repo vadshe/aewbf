@@ -196,7 +196,8 @@ static void ALG_SIG_config(IALG_Handle handle)
 
     DRV_imgsSetFramerate(defaultFPS); //Max FPS frame rate
     DRV_imgsSetEshutter(hn->Exp.Range.max, 0); //Max expouse
-    ALG_aewbSetSensorDcsub(170); //170 Offset for Aptina MT9P006
+    ALG_aewbSetSensorDcsub(190); //Offset for SONY IMX136
+    //ALG_aewbSetSensorDcsub(170); //170 Offset for Aptina MT9P006
     //DRV_imgsNDShutterInit();
     //DRV_imgsNDShutter(1, gBWMode); //Close IR-cut
 
@@ -357,9 +358,11 @@ void SIG2A_applySettings(void)
 
     //ISIF gain seting
     if(hn->GISIF.New != hn->GISIF.Old) {
-        hn->RGBgain[1] = hn->GISIF.New;
-        hn->RGBgain[0] = hn->GISIF.New*hn->RGBgain[0]/hn->GISIF.Old;
-        hn->RGBgain[2] = hn->GISIF.New*hn->RGBgain[2]/hn->GISIF.Old;
+        if(hn->RGBgain[0] != hn->GISIF.Range.max && hn->RGBgain[1] != hn->GISIF.Range.max && hn->RGBgain[2] != hn->GISIF.Range.max ){
+            hn->RGBgain[1] = hn->GISIF.New;
+            hn->RGBgain[0] = hn->GISIF.New*hn->RGBgain[0]/hn->GISIF.Old;
+            hn->RGBgain[2] = hn->GISIF.New*hn->RGBgain[2]/hn->GISIF.Old;
+        }
         hn->GISIF.Old = hn->GISIF.New;
         //OSA_printf("SIG2A_applySettings: new = %d old = %d Rgain = %d Ggain = %d Bgain = %d\n",
         //           hn->GISIF.New, hn->GISIF.Old, hn->RGBgain[0], hn->RGBgain[1], hn->RGBgain[2]);
