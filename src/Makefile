@@ -91,7 +91,8 @@ CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 LTLIBRARIES = $(noinst_LTLIBRARIES)
 libaewbf_la_LIBADD =
-am_libaewbf_la_OBJECTS = alg_aewb_control.lo aewbf_sig.lo alg_aewb.lo
+am_libaewbf_la_OBJECTS = alg_aewb_control.lo aewbf_sig.lo alg_aewb.lo \
+	gamma.lo
 libaewbf_la_OBJECTS = $(am_libaewbf_la_OBJECTS)
 AM_V_lt = $(am__v_lt_$(V))
 am__v_lt_ = $(am__v_lt_$(AM_DEFAULT_VERBOSITY))
@@ -274,7 +275,8 @@ top_builddir = ..
 top_srcdir = ..
 AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/include/aewb
 noinst_LTLIBRARIES = libaewbf.la
-libaewbf_la_SOURCES = alg_aewb_control.c aewbf_sig.c alg_aewb.c
+libaewbf_la_SOURCES = alg_aewb_control.c aewbf_sig.c alg_aewb.c \
+	gamma.c
 all: all-am
 
 .SUFFIXES:
@@ -333,6 +335,7 @@ distclean-compile:
 include ./$(DEPDIR)/aewbf_sig.Plo
 include ./$(DEPDIR)/alg_aewb.Plo
 include ./$(DEPDIR)/alg_aewb_control.Plo
+include ./$(DEPDIR)/gamma.Plo
 
 .c.o:
 	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<

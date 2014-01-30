@@ -85,17 +85,17 @@ typedef struct IAEWBF_SIG_Obj {
     IAEWBF_Param Offset;            //Offset
     IAEWBF_Param GISIF;             //ISIF gain
     IAEWBF_Param GIFIF;             //IFIF gain
+    IAEWBF_Param Grgb2rgb;          //Grgb2rgb gain
     IAEWBF_Param Y;
-    //XDAS_UInt32 Ydiff;              //The max differnce of Y in % to start AE
-    Hist_Param  RGB[3];              //Histogram of BoxCar image
+    IAEWBF_Param Hunif;             //Histogram uniformity
+    IAEWBF_Param Hmax;              //maximum of histogram
+    Hist_Param  RGB[3];             //Histogram of BoxCar image
     XDAS_UInt32 Hmin[2];            //min[0] minimum of histogram, min[1] the number of pixels below min[0]
-    XDAS_UInt32 Hmax[2];            //max[0] maximum of histogram, max[1] the number of pixels uper min[0]
     XDAS_UInt32 Hhalf;              //The median value of histogram
     XDAS_UInt32 HmaxTh;             //The max of histogram threshold
     XDAS_UInt32 HminTh;             //The min of histogram threshold
     XDAS_UInt32 HhalfTh;            //The Half of Histogram threshold
     XDAS_UInt32 SatTh;              //Saturation Threshold for histogram max and min
-    XDAS_UInt32 lowlight;           //1 - Low light
 
     //Dynamic parametar
     int gAePriorityMode, gBWMode, gDayNight, gIRCut, defaultFPS;

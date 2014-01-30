@@ -30,7 +30,7 @@ extern int gFlicker;
 
 extern int gAePriorityMode, gBWMode, gDayNight, gIRCut, defaultFPS;
 extern int IRcutClose, FPShigh;
-
+extern Uint32 gamma100[], gamma20[], gamma5[], gamma1[], gamma01[];
 
 
 #define GIO_AUTO_IRIS	(83)
@@ -196,7 +196,7 @@ static void ALG_SIG_config(IALG_Handle handle)
 
     DRV_imgsSetFramerate(defaultFPS); //Max FPS frame rate
     DRV_imgsSetEshutter(hn->Exp.Range.max, 0); //Max expouse
-    ALG_aewbSetSensorDcsub(190); //Offset for SONY IMX136
+    ALG_aewbSetSensorDcsub(176); //190 Offset for SONY IMX136
     //ALG_aewbSetSensorDcsub(170); //170 Offset for Aptina MT9P006
     //DRV_imgsNDShutterInit();
     //DRV_imgsNDShutter(1, gBWMode); //Close IR-cut
@@ -212,17 +212,19 @@ static void ALG_SIG_config(IALG_Handle handle)
     dataG.bypassR = 0;
     dataG.bypassG = 0;
     dataG.bypassB = 0;
-    dataG.tableR = tables;
-    dataG.tableG = tables;
-    dataG.tableB = tables;
+    dataG.tableR = gamma01;
+    dataG.tableG = gamma01;
+    dataG.tableB = gamma01;
 
     //Liner gamma tables
+    /*
     vl0 = 0;
     for(i=0; i < 512; i++){
         vl1 = i<<1;
         tables[i] = (vl0<<10) | (vl1 - vl0);
         vl0 = vl1;
     }
+    */
 
     if(CSL_ipipeSetGammaConfig(&gCSL_ipipeHndl, &dataG) != CSL_SOK)
         OSA_ERROR("Fail CSL_ipipeSetGammaConfig!!!\n");
@@ -336,6 +338,7 @@ void SIG2A_applySettings(void)
     }
 
     //Config gamma correction tables
+    /*
     if(hn->GISIF.New != hn->GISIF.Old || hn->Exp.New != hn->Exp.Old){
         dataG.tableSize = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SIZE_512;
         dataG.tableSrc  = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SELECT_RAM;
@@ -349,7 +352,7 @@ void SIG2A_applySettings(void)
         if(CSL_ipipeSetGammaConfig(&gCSL_ipipeHndl, &dataG) != CSL_SOK)
             OSA_ERROR("Fail CSL_ipipeSetGammaConfig!!!\n");
     }
-
+    */
     //Seting Expouse
     if(hn->Exp.New != hn->Exp.Old) {
         DRV_imgsSetEshutter(hn->Exp.New, 0);
@@ -357,6 +360,7 @@ void SIG2A_applySettings(void)
     }
 
     //ISIF gain seting
+    /*
     if(hn->GISIF.New != hn->GISIF.Old) {
         if(hn->RGBgain[0] != hn->GISIF.Range.max && hn->RGBgain[1] != hn->GISIF.Range.max && hn->RGBgain[2] != hn->GISIF.Range.max ){
             hn->RGBgain[1] = hn->GISIF.New;
@@ -366,7 +370,7 @@ void SIG2A_applySettings(void)
         hn->GISIF.Old = hn->GISIF.New;
         //OSA_printf("SIG2A_applySettings: new = %d old = %d Rgain = %d Ggain = %d Bgain = %d\n",
         //           hn->GISIF.New, hn->GISIF.Old, hn->RGBgain[0], hn->RGBgain[1], hn->RGBgain[2]);
-    }
+    }*/
     DRV_isifSetDgain(hn->RGBgain[1] , hn->RGBgain[0], hn->RGBgain[2], hn->RGBgain[1], 0);
 
     if(hn->Offset.New != hn->Offset.Old) {
@@ -400,18 +404,18 @@ void SIG2A_applySettings(void)
 
 
     //Config RGB2RGB matrix
-    if(0){
-        rgb2rgb.matrix[0][0] = 256;
+    if(hn->Grgb2rgb.New !=  hn->Grgb2rgb.Old){
+        rgb2rgb.matrix[0][0] = hn->Grgb2rgb.New;
         rgb2rgb.matrix[0][1] = 0;
         rgb2rgb.matrix[0][2] = 0;
 
         rgb2rgb.matrix[1][0] = 0;
-        rgb2rgb.matrix[1][1] = 256;
+        rgb2rgb.matrix[1][1] = hn->Grgb2rgb.New;
         rgb2rgb.matrix[1][2] = 0;
 
         rgb2rgb.matrix[2][0] = 0;
         rgb2rgb.matrix[2][1] = 0;
-        rgb2rgb.matrix[2][2] = 256;
+        rgb2rgb.matrix[2][2] = hn->Grgb2rgb.New;
 
         rgb2rgb.offset[0]    = 0;
         rgb2rgb.offset[1]    = 0;
@@ -419,10 +423,11 @@ void SIG2A_applySettings(void)
 
         if(DRV_ipipeSetRgb2Rgb(&rgb2rgb) != CSL_SOK)
             OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
-        if(DRV_ipipeSetRgb2Rgb2(&rgb2rgb) != CSL_SOK)
-            OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
-    }
+        //if(DRV_ipipeSetRgb2Rgb2(&rgb2rgb) != CSL_SOK)
+        //    OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
 
+        hn->Grgb2rgb.Old = hn->Grgb2rgb.New;
+    }
 }
 
 
@@ -589,30 +594,43 @@ int SIG_2A_config(IALG_Handle handle)
     hn->Offset.Th = 10; //10%
     hn->Offset.Diff = 0;
 
+    hn->Grgb2rgb.Old = 256;
+    hn->Grgb2rgb.New = 256;
+    hn->Grgb2rgb.Range.min = 1;
+    hn->Grgb2rgb.Range.max = 512;
+
+
     //Y setup
     hn->Y.Step = 1;
     hn->Y.New = 1;
     hn->Y.Old = 1;
     hn->Y.Max = 1;
-    hn->Y.Min = 1;
+    hn->Y.Min = 4095;
     hn->Y.Range.min = 0;
     hn->Y.Range.max = 4095;
     hn->Y.Th = 10; //10%
     hn->Y.Diff = 0;
 
+    //Hunif setup
+    hn->Hunif.New = 0;
+    hn->Hunif.Old = 0;
+
+    //Hmax setup
+    hn->Hmax.New = 0;
+    hn->Hmax.Old = 0;
+
     hn->RGBgain[0] = 512;
     hn->RGBgain[1] = 512;
     hn->RGBgain[2] = 512;
 
-    //For Aptina MT9P006 5 mpix
-    hn->HmaxTh = 3800;
-    hn->HminTh = 0;
     hn->HhalfTh = 100;
     hn->Hhalf = 0;
 
-    hn->RGB[0].MaxTh = 3700;
-    hn->RGB[1].MaxTh = 3700;
-    hn->RGB[2].MaxTh = 3700;
+    hn->RGB[0].MaxTh = 3800;
+    hn->RGB[1].MaxTh = 3800;
+    hn->RGB[2].MaxTh = 3800;
+    hn->HmaxTh = 3800;
+    hn->HminTh = 0;
 
     //First value of dymanic parameters
     hn->gAePriorityMode = gAePriorityMode;
