@@ -30,7 +30,7 @@ extern int gFlicker;
 
 extern int gAePriorityMode, gBWMode, gDayNight, gIRCut, defaultFPS;
 extern int IRcutClose, FPShigh;
-extern Uint32 gamma100[], gamma20[], gamma5[], gamma1[], gamma01[];
+extern Uint32 gamma100[], gamma20[], gamma_hdr011[], gamma_hdr01[], gamma01[];
 
 
 #define GIO_AUTO_IRIS	(83)
@@ -88,6 +88,7 @@ static int lowlight = 0;
 static int sensorExposureMax = 33333;
 static int HighGain = 0;
 static int OV271X_gain = 0;
+static int stepSize = 1;
 
 unsigned int * GetYBuffDATA(unsigned int *Vsize, unsigned int *Hsize)
 {
@@ -194,8 +195,8 @@ static void ALG_SIG_config(IALG_Handle handle)
     CSL_IpipeRgb2RgbConfig rgb2rgb;
     DRV_IpipeWb ipipeWb;
 
-    DRV_imgsSetFramerate(defaultFPS); //Max FPS frame rate
     DRV_imgsSetEshutter(hn->Exp.Range.max, 0); //Max expouse
+    DRV_imgsSetFramerate(defaultFPS); //Max FPS frame rate
     ALG_aewbSetSensorDcsub(176); //190 Offset for SONY IMX136
     //ALG_aewbSetSensorDcsub(170); //170 Offset for Aptina MT9P006
     //DRV_imgsNDShutterInit();
@@ -212,9 +213,9 @@ static void ALG_SIG_config(IALG_Handle handle)
     dataG.bypassR = 0;
     dataG.bypassG = 0;
     dataG.bypassB = 0;
-    dataG.tableR = gamma01;
-    dataG.tableG = gamma01;
-    dataG.tableB = gamma01;
+    dataG.tableR = gamma01;//gamma_hdr011; //gamma_hdr01; //gamma01;
+    dataG.tableG = dataG.tableR;
+    dataG.tableB = dataG.tableR;
 
     //Liner gamma tables
     /*
@@ -268,12 +269,6 @@ static void ALG_SIG_config(IALG_Handle handle)
 
     DRV_ipipeSetWbOffset(0);
     DRV_ipipeSetWb(&ipipeWb);
-
-    //DRV_imgsSetAEPriority(0);
-    //ALG_aewbSetNDShutterOnOff(1);
-    //ALG_aewbSetNDShutterOnOff(0);
-    //ALG_aewbSetNDShutterOnOff(1);
-
 }
 
 void SIG2A_applySettings(void)
@@ -301,6 +296,9 @@ void SIG2A_applySettings(void)
         }
         hn->gBWMode = gBWMode;
     }
+
+    //DRV_imgsSetEshutter(33333, 0); //Max expouse
+    //DRV_imgsSetFramerate(30); //Max FPS frame rate
 
     //Change FPS
     if (FPShigh != hn->FPShigh || gAePriorityMode != hn->gAePriorityMode) {
@@ -339,21 +337,22 @@ void SIG2A_applySettings(void)
 
     //Config gamma correction tables
     /*
-    if(hn->GISIF.New != hn->GISIF.Old || hn->Exp.New != hn->Exp.Old){
+   // if(hn->GISIF.New != hn->GISIF.Old || hn->Exp.New != hn->Exp.Old){
         dataG.tableSize = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SIZE_512;
         dataG.tableSrc  = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SELECT_RAM;
         dataG.bypassR = 0;
         dataG.bypassG = 0;
         dataG.bypassB = 0;
         dataG.tableR = hn->RGB[0].hist;
-        dataG.tableG = hn->RGB[1].hist;
-        dataG.tableB = hn->RGB[2].hist;
+        dataG.tableG = hn->RGB[0].hist;
+        dataG.tableB = hn->RGB[0].hist;
         //Setup gamma tables
         if(CSL_ipipeSetGammaConfig(&gCSL_ipipeHndl, &dataG) != CSL_SOK)
             OSA_ERROR("Fail CSL_ipipeSetGammaConfig!!!\n");
-    }
+    //}
     */
     //Seting Expouse
+
     if(hn->Exp.New != hn->Exp.Old) {
         DRV_imgsSetEshutter(hn->Exp.New, 0);
         hn->Exp.Old = hn->Exp.New;
@@ -374,8 +373,7 @@ void SIG2A_applySettings(void)
     DRV_isifSetDgain(hn->RGBgain[1] , hn->RGBgain[0], hn->RGBgain[2], hn->RGBgain[1], 0);
 
     if(hn->Offset.New != hn->Offset.Old) {
-        //ALG_aewbSetSensorDcsub(hn->Offset.New);
-        //ALG_aewbSetSensorDcsub(170);
+        DRV_ipipeSetWbOffset(-hn->Offset.New);
         hn->Offset.Old = hn->Offset.New;
     }
 
@@ -383,8 +381,6 @@ void SIG2A_applySettings(void)
     //gain = hn->Gain.New - hn->RGBgain[hn->maxi];
     //DRV_isifSetDgain(gain + hn->RGBgain[1] , gain + hn->RGBgain[0], gain + hn->RGBgain[2], gain + hn->RGBgain[1], 0);
     //gain = hn->Gain.New - hn->RGBgain[hn->maxi];
-
-
 
 
     //gain = (4000<<9)/(hn->Hmax[0] - hn->Hmin[0]);
@@ -586,9 +582,9 @@ int SIG_2A_config(IALG_Handle handle)
     //ISIF offset setup
     hn->Offset.Step = 1;
     hn->Offset.Old = 0;
-    hn->Offset.New = 1;
-    hn->Offset.Max = 1;
-    hn->Offset.Min = 1;
+    hn->Offset.New = 0;
+    hn->Offset.Max = 0;
+    hn->Offset.Min = 2000;
     hn->Offset.Range.min = 1;
     hn->Offset.Range.max = 4095;
     hn->Offset.Th = 10; //10%
@@ -626,10 +622,10 @@ int SIG_2A_config(IALG_Handle handle)
     hn->HhalfTh = 100;
     hn->Hhalf = 0;
 
-    hn->RGB[0].MaxTh = 3800;
-    hn->RGB[1].MaxTh = 3800;
-    hn->RGB[2].MaxTh = 3800;
     hn->HmaxTh = 3800;
+    hn->RGB[0].MaxTh = hn->HmaxTh;
+    hn->RGB[1].MaxTh = hn->HmaxTh;
+    hn->RGB[2].MaxTh = hn->HmaxTh;
     hn->HminTh = 0;
 
     //First value of dymanic parameters
@@ -957,8 +953,7 @@ void *ALG_aewbCreate(ALG_AewbCreate *create)
 int TI_2A_config(int flicker_detection, int saldre)
 {
     IAE_DynamicParams aeDynamicParams;
-    int i, stepSize;
-    int retval;
+    int i, retval;
     aeDynamicParams.size = sizeof(aeDynamicParams);
     aeDynamicParams.numRanges = 0;
 
@@ -1116,14 +1111,14 @@ int TI_2A_config(int flicker_detection, int saldre)
     aeDynamicParams.exposureTimeRange[i].max = sensorExposureMax;
     } else
     {
-    if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0)
-    {
-        aeDynamicParams.exposureTimeRange[i].min = 0x10*32;
-    } else
-    {
-        aeDynamicParams.exposureTimeRange[i].min = stepSize;
-    }
-    aeDynamicParams.exposureTimeRange[i].max = sensorExposureMax;
+	if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0)
+	{
+	    aeDynamicParams.exposureTimeRange[i].min = 0x10*32;
+	} else
+	{
+	    aeDynamicParams.exposureTimeRange[i].min = 1;
+	}
+	aeDynamicParams.exposureTimeRange[i].max = sensorExposureMax;
     }
 
     aeDynamicParams.apertureLevelRange[i].min = 0;
@@ -1266,7 +1261,7 @@ int Get_BoxCar(IALG_Handle handle)
     hn->box = pBufInfo->virtAddr;
     hn->w = gDRV_ipipeObj.boxcarInfo.width;
     hn->h = gDRV_ipipeObj.boxcarInfo.height;
-    hn->SatTh = hn->w*hn->h/200;
+    hn->SatTh = hn->w*hn->h*3/200;
 
     return OSA_SOK;
 }
@@ -1835,7 +1830,6 @@ void TI2AFunc(void *pAddr)
 
 }
 
-
 void SIG2AFunc(void *pAddr)
 {
 
@@ -1853,6 +1847,54 @@ void SIG2AFunc(void *pAddr)
 
     }
     aewbFrames++;
+}
+
+void Auto_Flicker_Control(void)
+{
+  int retval;
+  IAE_DynamicParams aeDynamicParams;
+  aeDynamicParams.size = sizeof(aeDynamicParams);
+  extern int gFlicker;
+  static int autoflicker = 0;
+
+  if (gFlicker != VIDEO_NONE)
+  {
+    if (sensorExposure <= stepSize && HISTgain_mid <= 512 && autoflicker == 0)   // disable flicker control if too bright
+    {
+      retval = AE_TI_AE.control((IAE_Handle)gALG_aewbObj.handle_ae, IAE_CMD_GET_CONFIG, &aeDynamicParams, NULL);
+      if(retval == -1) {
+          OSA_ERROR("AE_TI_AE.control()\n");
+          return retval;
+      }
+
+      aeDynamicParams.exposureTimeStepSize = 1;
+
+      retval = AE_TI_AE.control((IAE_Handle)gALG_aewbObj.handle_ae, IAE_CMD_SET_CONFIG, &aeDynamicParams, NULL);
+      if(retval == -1) {
+          OSA_ERROR("AE_TI_AE.control()\n");
+          return retval;
+      }
+      autoflicker = 1;
+    }
+
+    if (sensorExposure > stepSize && HISTgain_mid > 512 && autoflicker == 1)    // enable flicker control if dark
+    {
+      retval = AE_TI_AE.control((IAE_Handle)gALG_aewbObj.handle_ae, IAE_CMD_GET_CONFIG, &aeDynamicParams, NULL);
+      if(retval == -1) {
+          OSA_ERROR("AE_TI_AE.control()\n");
+          return retval;
+      }
+
+      aeDynamicParams.exposureTimeStepSize = stepSize;
+
+      retval = AE_TI_AE.control((IAE_Handle)gALG_aewbObj.handle_ae, IAE_CMD_SET_CONFIG, &aeDynamicParams, NULL);
+      if(retval == -1) {
+          OSA_ERROR("AE_TI_AE.control()\n");
+          return retval;
+      }
+      autoflicker = 0;
+    }
+  }
 }
 
 void TI2A_applySettings(IAEWB_Ae *curAe, IAEWB_Ae *nextAe, int numSmoothSteps, int step)
@@ -1885,6 +1927,8 @@ void TI2A_applySettings(IAEWB_Ae *curAe, IAEWB_Ae *nextAe, int numSmoothSteps, i
   ipipe_awb_gain.hGain_mid = HISTgain_mid;
   ipipe_awb_gain.hMin = HISTmin;
   ipipe_awb_gain.hMode = HISTmode;
+
+  Auto_Flicker_Control();   // disable flicker control if too bright
 
   ALG_aewbSetIpipeWb(&ipipe_awb_gain, gALG_aewbObj.DGainEnable, lowlight);
   ALG_aewbSetSensorExposure(sensorExposure);

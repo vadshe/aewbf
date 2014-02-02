@@ -628,7 +628,7 @@ short ALG_aewbSetRgb2Rgb(RGB2RGB_PARAM  *pRgb2Rgb )
   if (strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0)
   {
       // Need color correction for more best matrix
-      rgb2rgb.matrix[0][0] = 380;
+      /*rgb2rgb.matrix[0][0] = 380;
       rgb2rgb.matrix[0][1] = -59;
       rgb2rgb.matrix[0][2] = -66;
 
@@ -638,7 +638,20 @@ short ALG_aewbSetRgb2Rgb(RGB2RGB_PARAM  *pRgb2Rgb )
 
       rgb2rgb.matrix[2][0] = -8;
       rgb2rgb.matrix[2][1] = -168;
-      rgb2rgb.matrix[2][2] = 432;
+      rgb2rgb.matrix[2][2] = 432;*/
+
+      // CCM from IMX136 datasheet
+      rgb2rgb.matrix[0][0] = 360;
+      rgb2rgb.matrix[0][1] = -153;
+      rgb2rgb.matrix[0][2] = 49;
+
+      rgb2rgb.matrix[1][0] = -92;
+      rgb2rgb.matrix[1][1] = 312;
+      rgb2rgb.matrix[1][2] = 36;
+
+      rgb2rgb.matrix[2][0] = 37;
+      rgb2rgb.matrix[2][1] = -338;
+      rgb2rgb.matrix[2][2] = 557;
   } else
   {
   rgb2rgb.matrix[0][0] = pRgb2Rgb->rgb_mul_rr;

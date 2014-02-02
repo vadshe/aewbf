@@ -165,7 +165,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
     Uint16 *box = hn->box;
     Uint32 hsz = ALG_SENSOR_BITS, leave_frames = 5;
     Uint32 sum, mins, minr, minb, maxs, tmp, th = hn->SatTh, thh, hc = 0, min, mini;
-    Uint32 hist[hsz], cn = 0, hh;
+    Uint32 hist[hsz], cn = 0, HDR = 1;
 
     //GN[0] = 1536; GN[1] = 1280; GN[2] = 1024; GN[3] = 768; GN[4] = 512;
     //N[0][0] = 1536; GN[0][1] = 1024; GN[0][4] = 512;
@@ -205,6 +205,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             //hist[Y1>>3]++;
             cn++;
         }
+
         /*
         if(hc) {
             R = R/hc>>2; G = G/hc>>2; B = B/hc>>2;
@@ -223,25 +224,22 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
 
         //Find histogram minimum
         sum = 0;
-        thh = hn->HminTh>>3;
-        for(j=0; j <= thh; j++) sum += hist[j];
-        if(!sum){
-            for(i=j; sum < th; i++) sum += hist[i];
-            hn->Hmin[0] = i<<3; hn->Hmin[1] = hist[j];
-        } else { hn->Hmin[0] = hn->HminTh; hn->Hmin[1] = sum; }
+        for(i=0; sum < hn->SatTh; i++) sum += hist[i];
+        hn->Hmin[0] = (i-1)<<3; hn->Hmin[1] = sum;
 
         //Find half of histogram
         thh = sz3>>1;
         sum = 0;
         for(i=0; sum < thh; i++) sum += hist[i];
-        hn->Hhalf = (i<<3); //Half of histogram
+        hn->Hhalf = ((i-1)<<3); //Half of histogram
         //hn->Hhalf = (i<<12)/hn->GISIF.New; //Half of histogram in real sensor value
 
          //Find histogram maximum
         sum = 0;
         for(i=hsz-1; sum < hn->SatTh; i--) sum += hist[i];
-        hn->Hmax.New = i<<3;
+        hn->Hmax.New = (i+1)<<3;
 
+        /*
         if(hn->Hmax.New != hn->Hmax.Old){
             //Find histogram uniformity
             hh = sz3>>9;
@@ -249,11 +247,13 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             for(i=0; i < thh; i++) if(hist[i]) sum += abs(hist[i] - hh);
             hn->Hunif.New = sum>>9;
         }
+        dprintf("Hunif = %d \n", hn->Hunif.New);
+        */
 
-        //Find max and min in color histogram
+        //Find max in color histogram
         for(j=0; j < 3; j++){
-            for(i=0; !hn->RGB[j].hist[i]; i++);
-            hn->RGB[j].min = i<<3; hn->RGB[j].mins = hn->RGB[j].hist[i];
+            //for(i=0; !hn->RGB[j].hist[i]; i++);
+            //hn->RGB[j].min = i<<3; hn->RGB[j].mins = hn->RGB[j].hist[i];
             sum = 0;
             thh = hn->RGB[j].MaxTh>>3;
             for(i=hsz-1; i > thh; i--) sum += hn->RGB[j].hist[i];
@@ -328,46 +328,70 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         }
         */
         //Expouse and gain
-        if(hn->RGB[0].maxs > hn->SatTh || hn->RGB[1].maxs > hn->SatTh || hn->RGB[2].maxs > hn->SatTh ){
-            dprintf("DOWN!!!!!!!!!!!!!!!!!\n");
-            //Find max step
-            //mins = ((sz3 - hn->Hmax[1])<<10)/sz3;
-            mins = ((sz - hn->RGB[0].maxs)<<10)/sz;
-            for(j=1; j < 3; j++) {
-                tmp = ((sz - hn->RGB[j].maxs)<<10)/sz;
-                mins = tmp < mins ? tmp : mins;
-            }
-            mins = mins < 512 ? 512 : mins;
-
-            dprintf("mins = %d g = %f \n", mins, (float)mins/1024.);
-            //Decrease expouse
-            hn->Exp.New = hn->Exp.Old*mins>>10;
-            if(hn->Exp.New < hn->Exp.Range.min)  hn->Exp.New = hn->Exp.Range.min;
-
-            hn->Y.Diff = 0;
-            hn->Y.Max = Y;
-            hn->Y.Min = Y;
-            up = 0;
-            //down = 1;
-        } else if (hn->Y.Diff > hn->Y.Th ){
-            dprintf("UP!!!!!!!!!!!!!!!!!\n");
-            //Check max
-            //maxs = hn->Y.Diff > hn->Y.Th ? hn->Y.Diff : hn->Y.Th;
-            maxs = hn->Y.Th;
-            //Increase expouse at first
-            if(hn->Exp.Old < hn->Exp.Range.max ) {
-                //hn->Exp.New = hn->Exp.Old*hn->HmaxTh/hn->Hmax[0];
-                hn->Exp.New = hn->Exp.Old*(100 + maxs)/100;
-                if(hn->Exp.New > hn->Exp.Range.max){
-                    hn->Exp.New = hn->Exp.Range.max;
+        if(HDR) {
+            if(hn->Hmin[0] > 200) {
+                hn->Exp.New = hn->Exp.Old*200/(hn->Hmin[0]);
+                hn->Y.Diff = 0;
+                hn->Y.Max = Y;
+                hn->Y.Min = Y;
+            } else if (hn->Y.Diff > hn->Y.Th ){
+                dprintf("UP!!!!!!!!!!!!!!!!!\n");
+                //Check max
+                //maxs = hn->Y.Diff > hn->Y.Th ? hn->Y.Diff : hn->Y.Th;
+                maxs = hn->Y.Th;
+                //Increase expouse at first
+                if(hn->Exp.Old < hn->Exp.Range.max ) {
+                    //hn->Exp.New = hn->Exp.Old*hn->HmaxTh/hn->Hmax[0];
+                    hn->Exp.New = hn->Exp.Old*(100 + maxs)/100;
+                    if(hn->Exp.New > hn->Exp.Range.max){
+                        hn->Exp.New = hn->Exp.Range.max;
+                    }
                 }
-            }
-            //down = 0;
-        } //else down = 0;
+                //down = 0;
+            } //else down = 0;
+        } else {
+            if(hn->RGB[0].maxs > hn->SatTh || hn->RGB[1].maxs > hn->SatTh || hn->RGB[2].maxs > hn->SatTh ){
+                dprintf("DOWN!!!!!!!!!!!!!!!!!\n");
+                //Find max step
+                //mins = ((sz3 - hn->Hmax[1])<<10)/sz3;
+                mins = ((sz - hn->RGB[0].maxs)<<10)/sz;
+                for(j=1; j < 3; j++) {
+                    tmp = ((sz - hn->RGB[j].maxs)<<10)/sz;
+                    mins = tmp < mins ? tmp : mins;
+                }
+                mins = mins < 512 ? 512 : mins;
+
+                dprintf("mins = %d g = %f \n", mins, (float)mins/1024.);
+                //Decrease expouse
+                hn->Exp.New = hn->Exp.Old*mins>>10;
+                if(hn->Exp.New < hn->Exp.Range.min)  hn->Exp.New = hn->Exp.Range.min;
+
+                hn->Y.Diff = 0;
+                hn->Y.Max = Y;
+                hn->Y.Min = Y;
+                up = 0;
+                //down = 1;
+            } else if (hn->Y.Diff > hn->Y.Th ){
+                dprintf("UP!!!!!!!!!!!!!!!!!\n");
+                //Check max
+                //maxs = hn->Y.Diff > hn->Y.Th ? hn->Y.Diff : hn->Y.Th;
+                maxs = hn->Y.Th;
+                //Increase expouse at first
+                if(hn->Exp.Old < hn->Exp.Range.max ) {
+                    //hn->Exp.New = hn->Exp.Old*hn->HmaxTh/hn->Hmax[0];
+                    hn->Exp.New = hn->Exp.Old*(100 + maxs)/100;
+                    if(hn->Exp.New > hn->Exp.Range.max){
+                        hn->Exp.New = hn->Exp.Range.max;
+                    }
+                }
+                //down = 0;
+            } //else down = 0;
+        }
 
         //Low light condition
         //First down fps
         //if(gAePriorityMode == ALG_FPS_LOW || gAePriorityMode == ALG_FPS_5FPS){
+        /*
         if ( FPShigh == 1 && IRcutClose == 1 && Y < 130) {
             frame_count += leave_frames;
             if (frame_count > 100) {
@@ -382,6 +406,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                 frame_count = 0;
             }
         }
+        */
         //}
 
         //Second open IR-cut
@@ -422,7 +447,10 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         }
         */
 
-        hn->GIFIF.New = (((hn->HmaxTh>>1) - 200)<<9)/Y;
+
+        hn->Offset.New = hn->Hmin[0];
+        //if(Y) hn->GIFIF.New = (((hn->HmaxTh>>1)-200)<<9)/Y;
+        if(hn->Hmax.New) hn->GIFIF.New = (hn->HmaxTh<<9)/(hn->Hmax.New - hn->Offset.New);
 
         if(hn->GIFIF.New > hn->GIFIF.Range.max){
             hn->Grgb2rgb.New = (hn->GIFIF.New - hn->GIFIF.Range.max)>>1;
@@ -436,9 +464,9 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         hn->Grgb2rgb.New = hn->Grgb2rgb.New > hn->Grgb2rgb.Range.max ? hn->Grgb2rgb.Range.max : hn->Grgb2rgb.New;
         hn->Grgb2rgb.New = hn->Grgb2rgb.New < hn->Grgb2rgb.Range.min ? hn->Grgb2rgb.Range.min : hn->Grgb2rgb.New;
 
-        dprintf("gain = %d grgb2rgb = %d\n", hn->GIFIF.New, hn->Grgb2rgb.New);
 
 #ifdef AE_DEBUG_PRINTS
+        dprintf("gain = %d grgb2rgb = %d offset = %d\n", hn->GIFIF.New, hn->Grgb2rgb.New, hn->Offset.New);
         dprintf("up = %d  wbR = %d wbB = %d wbS = %d gnS = %d dec_exp = %d\n", up,  wbR, wbB, wbS, gnS, dec_exp);
         dprintf("Exp.Old = %d Exp.New = %d Offset.Old = %d Offset.New = %d\n",
                 hn->Exp.Old, hn->Exp.New, hn->Offset.Old, hn->Offset.New);
@@ -465,6 +493,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         d = 512;
         a = (1<<16)/d, b = (1<<17)/sz;
 
+
         //dprintf("Hmin = %d Hmax = %d d = %d \n", hmin, hmax, d);
         //Linear
         //for(i=0; i < hmin; i++) p[i] = 0;
@@ -472,26 +501,29 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         //for(i=hmax; i <= dm; i++) p[i] = 1023;
 
         //Integral
+        /*
+        for(j=0; j < 1; j++){
 
-        for(j=0; j < 3; j++){
-            /*
             sum = 0;
             for(i=0; i < hsz; i++) {
-                sum += hn->RGB[j].hist[i];
-                hn->RGB[j].hist[i] = sum*b>>7;
+                sum += hist[i];
+                //if(j==1)  dprintf("%d  hist = %d  %d  \n", i, hn->RGB[j].hist[i], sum*b>>7);
+                hist[i] = sum*b>>7;
             }
-            */
+
             hn->RGB[j].hist[0] = 0;
             vl0 = 0;
             for(i=1; i < dm; i++){
+                vl1 = hist[i];
                 //vl1 = (hn->RGB[j].hist[i] + (i<<1))>>1;
-                vl1 = i<<1;
+                //vl1 = i<<1;
                 //hn->lut[i] = (vl0<<10) | (vl1 - vl0);
                 hn->RGB[j].hist[i] = (vl0<<10) | (vl1 - vl0);
                 //if(j==1) dprintf("%d  hist = %d  %d  %d\n", i, hn->RGBh[j][i], vl0, (vl1 - vl0));
                 vl0 = vl1;
             }
         }
+        */
 
         /*
         for(k=0; k < 3; k++){
