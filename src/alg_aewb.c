@@ -30,7 +30,7 @@ extern int gFlicker;
 
 extern int gAePriorityMode, gBWMode, gDayNight, gIRCut, defaultFPS;
 extern int IRcutClose, FPShigh;
-extern Uint32 gamma100[], gamma20[], gamma_hdr011[], gamma_hdr01[], gamma01[];
+extern Uint32 gamma42[], gamma00520[], gamma_hdr011[], gamma_hdr01[], gamma01[];
 
 
 #define GIO_AUTO_IRIS	(83)
@@ -197,7 +197,7 @@ static void ALG_SIG_config(IALG_Handle handle)
 
     DRV_imgsSetEshutter(hn->Exp.Range.max, 0); //Max expouse
     DRV_imgsSetFramerate(defaultFPS); //Max FPS frame rate
-    ALG_aewbSetSensorDcsub(176); //190 Offset for SONY IMX136
+    ALG_aewbSetSensorDcsub(176); //176 Offset for SONY IMX136
     //ALG_aewbSetSensorDcsub(170); //170 Offset for Aptina MT9P006
     //DRV_imgsNDShutterInit();
     //DRV_imgsNDShutter(1, gBWMode); //Close IR-cut
@@ -213,7 +213,7 @@ static void ALG_SIG_config(IALG_Handle handle)
     dataG.bypassR = 0;
     dataG.bypassG = 0;
     dataG.bypassB = 0;
-    dataG.tableR = gamma01;//gamma_hdr011; //gamma_hdr01; //gamma01;
+    dataG.tableR = gamma01; //gamma42; //gamma_hdr011; //gamma_hdr01; //gamma01; //gamma00520
     dataG.tableG = dataG.tableR;
     dataG.tableB = dataG.tableR;
 
@@ -229,8 +229,6 @@ static void ALG_SIG_config(IALG_Handle handle)
 
     if(CSL_ipipeSetGammaConfig(&gCSL_ipipeHndl, &dataG) != CSL_SOK)
         OSA_ERROR("Fail CSL_ipipeSetGammaConfig!!!\n");
-
-
 
     //Config RGB2RGB matrix
     rgb2rgb.matrix[0][0] = 256;
@@ -353,6 +351,7 @@ void SIG2A_applySettings(void)
     */
     //Seting Expouse
 
+    //DRV_imgsSetEshutter(33333, 0);
     if(hn->Exp.New != hn->Exp.Old) {
         DRV_imgsSetEshutter(hn->Exp.New, 0);
         hn->Exp.Old = hn->Exp.New;
@@ -593,7 +592,7 @@ int SIG_2A_config(IALG_Handle handle)
     hn->Grgb2rgb.Old = 256;
     hn->Grgb2rgb.New = 256;
     hn->Grgb2rgb.Range.min = 1;
-    hn->Grgb2rgb.Range.max = 512;
+    hn->Grgb2rgb.Range.max = 2047;
 
 
     //Y setup
@@ -1261,7 +1260,7 @@ int Get_BoxCar(IALG_Handle handle)
     hn->box = pBufInfo->virtAddr;
     hn->w = gDRV_ipipeObj.boxcarInfo.width;
     hn->h = gDRV_ipipeObj.boxcarInfo.height;
-    hn->SatTh = hn->w*hn->h*3/200;
+    hn->SatTh = hn->w*hn->h*3/100;
 
     return OSA_SOK;
 }
