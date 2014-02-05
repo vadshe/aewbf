@@ -161,11 +161,12 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
     int sz = w*h,  sz4 = sz*4, sz3 = sz*3, sz2 = sz3>>1;
     //int hv = sz3, hv2 = sz3>>1;
     Uint32 R=0, G=0, B=0;
+    Uint32 r, g, b;
     Uint32  Y=0, Y1=0, ns = 3, GR[ns], GB[ns], GN[ns];
     Uint16 *box = hn->box;
     Uint32 hsz = ALG_SENSOR_BITS, leave_frames = 5;
     Uint32 sum, mins, minr, minb, maxs, tmp, th = hn->SatTh, thh, hc = 0, min, mini;
-    Uint32 hist[hsz], cn = 0, HDR = 1;
+    Uint32 hist[hsz], cn = 0, HDR = 1, c = 30720;
 
     //GN[0] = 1536; GN[1] = 1280; GN[2] = 1024; GN[3] = 768; GN[4] = 512;
     //N[0][0] = 1536; GN[0][1] = 1024; GN[0][4] = 512;
@@ -184,16 +185,20 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         for(j=0; j < ns; j++) { GR[j] = 0; GB[j] = 0; }
 
         for(i=0; i < sz4; i+=4) {
-            i1 = i+1; i2 = i+2;
-            Y1 = (117*box[i ] + 601*box[i1] + 306*box[i2])>>12;
+            //i1 = i+1; i2 = i+2;
+            r = box[i+2]>>2;
+            g = box[i+1]>>2;
+            b = box[i  ]>>2;
+
+            Y1 = (117*b + 601*g + 306*r)>>10;
             //if(Y1 > hn->Hhalf) {
                 //B += box[i ];
                 //G += box[i1];
                 //R += box[i2];
             if(!HDR){
-                G = box[i1] > 2048 ? box[i1]*18 - 34816 : box[i1];
-                B = box[i ] > 2048 ? box[i ]*18 - 34816 : box[i ];
-                R = box[i2] > 2048 ? box[i2]*18 - 34816 : box[i2];
+                R = r > 2048 ? (r<<4) - c : r;
+                G = g > 2048 ? (g<<4) - c : g;
+                B = b > 2048 ? (b<<4) - c : b;
                 for(j=0; j < ns; j++) {
                     GB[j] += abs(G - (B*GN[j]>>10));
                     GR[j] += abs(G - (R*GN[j]>>10));
@@ -207,16 +212,16 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                 }*/
             } else {
                 for(j=0; j < ns; j++) {
-                    GB[j] += abs(box[i1] - (box[i ]*GN[j]>>10));
-                    GR[j] += abs(box[i1] - (box[i2]*GN[j]>>10));
+                    GB[j] += abs(g - (b*GN[j]>>10));
+                    GR[j] += abs(g - (b*GN[j]>>10));
                 }
             }
             //hc++;
             //}
             Y += Y1;
-            hn->RGB[0].hist[box[i2]>>5]++;
-            hn->RGB[1].hist[box[i1]>>5]++;
-            hn->RGB[2].hist[box[i ]>>5]++;
+            hn->RGB[0].hist[r>>3]++;
+            hn->RGB[1].hist[g>>3]++;
+            hn->RGB[2].hist[b>>3]++;
             //hist[Y1>>3]++;
             cn++;
         }
@@ -272,9 +277,15 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             hn->RGB[j].min = (i-1)<<3;
             hn->RGB[j].mins = sum;
             sum = 0;
-            thh = hn->RGB[j].MaxTh>>3;
-            for(i=hsz-1; i > thh; i--) sum += hn->RGB[j].hist[i];
-            hn->RGB[j].max = hn->RGB[j].MaxTh; hn->RGB[j].maxs = sum;
+            if(HDR){
+                for(i=hsz-1; sum < hn->SatTh; i--) sum += hn->RGB[j].hist[i];
+                hn->RGB[j].max = (i+1)<<3;; hn->RGB[j].maxs = sum;
+
+            } else {
+                thh = hn->RGB[j].MaxTh>>3;
+                for(i=hsz-1; i > thh; i--) sum += hn->RGB[j].hist[i];
+                hn->RGB[j].max = hn->RGB[j].MaxTh; hn->RGB[j].maxs = sum;
+            }
         }
 
         //Check Y history of difference
@@ -295,7 +306,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         dprintf("Bmin = %u Bmins = %u Bmax = %u Bmaxs = %u  \n", hn->RGB[2].min, hn->RGB[2].mins, hn->RGB[2].max, hn->RGB[2].maxs);
 #endif
         //White balance algorithm
-        if(frames > 20){
+        if(1){
             min = GR[0]; minr = 0;
             for(j=1; j < ns; j++){
                 if(GR[j] < min) { min = GR[j]; minr = j; }
@@ -469,6 +480,8 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         hn->Offset.New = hn->Hmin[0];
         //if(Y) hn->GIFIF.New = (((hn->HmaxTh>>1)-200)<<9)/Y;
         if(hn->Hmax.New) hn->GIFIF.New = (hn->HmaxTh<<9)/(hn->Hmax.New - hn->Offset.New);
+        //hn->Offset.New = 0;
+        //if(hn->Hmax.New) hn->GIFIF.New = 512;
 
         if(hn->GIFIF.New > hn->GIFIF.Range.max){
             //hn->Grgb2rgb.New = (hn->GIFIF.New - hn->GIFIF.Range.max)>>1;

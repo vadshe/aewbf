@@ -197,10 +197,14 @@ static void ALG_SIG_config(IALG_Handle handle)
 
     DRV_imgsSetEshutter(hn->Exp.Range.max, 0); //Max expouse
     DRV_imgsSetFramerate(defaultFPS); //Max FPS frame rate
-    ALG_aewbSetSensorDcsub(176); //176 Offset for SONY IMX136
+    ALG_aewbSetSensorDcsub(0); //176 Offset for SONY IMX136
     //ALG_aewbSetSensorDcsub(170); //170 Offset for Aptina MT9P006
     //DRV_imgsNDShutterInit();
     //DRV_imgsNDShutter(1, gBWMode); //Close IR-cut
+
+    //DRV_imgsSetCompress(9, 10, 1, 6);
+    //DRV_imgsSetCompress(8, 10, 2, 5);
+    //DRV_imgsSetCompress(6, 12, 3, 6);
 
     //Config contrast and Brightness
     //DRV_ipipeSetYoffet((pParm->yuv_adj_brt-128));
@@ -213,7 +217,7 @@ static void ALG_SIG_config(IALG_Handle handle)
     dataG.bypassR = 0;
     dataG.bypassG = 0;
     dataG.bypassB = 0;
-    dataG.tableR = gamma01; //gamma42; //gamma_hdr011; //gamma_hdr01; //gamma01; //gamma00520
+    dataG.tableR = gamma42; //gamma42; //gamma_hdr011; //gamma_hdr01; //gamma01; //gamma00520
     dataG.tableG = dataG.tableR;
     dataG.tableB = dataG.tableR;
 
@@ -1260,7 +1264,7 @@ int Get_BoxCar(IALG_Handle handle)
     hn->box = pBufInfo->virtAddr;
     hn->w = gDRV_ipipeObj.boxcarInfo.width;
     hn->h = gDRV_ipipeObj.boxcarInfo.height;
-    hn->SatTh = hn->w*hn->h*3/100;
+    hn->SatTh = hn->w*hn->h*3/300;
 
     return OSA_SOK;
 }
