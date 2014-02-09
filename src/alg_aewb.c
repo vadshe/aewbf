@@ -30,7 +30,7 @@ extern int gFlicker;
 
 extern int gAePriorityMode, gBWMode, gDayNight, gIRCut, defaultFPS;
 extern int IRcutClose, FPShigh;
-extern Uint32 gamma42[], gamma00520[], gamma_hdr011[], gamma_hdr01[], gamma01[];
+extern Uint32 gamma42[], gamma00520[], gamma_hdr011[], gamma_hdr01[], gamma01[], gamma005[], gamma003[];
 
 
 #define GIO_AUTO_IRIS	(83)
@@ -197,7 +197,7 @@ static void ALG_SIG_config(IALG_Handle handle)
 
     DRV_imgsSetEshutter(hn->Exp.Range.max, 0); //Max expouse
     DRV_imgsSetFramerate(defaultFPS); //Max FPS frame rate
-    ALG_aewbSetSensorDcsub(0); //176 Offset for SONY IMX136
+    ALG_aewbSetSensorDcsub(176); //176 Offset for SONY IMX136
     //ALG_aewbSetSensorDcsub(170); //170 Offset for Aptina MT9P006
     //DRV_imgsNDShutterInit();
     //DRV_imgsNDShutter(1, gBWMode); //Close IR-cut
@@ -217,7 +217,7 @@ static void ALG_SIG_config(IALG_Handle handle)
     dataG.bypassR = 0;
     dataG.bypassG = 0;
     dataG.bypassB = 0;
-    dataG.tableR = gamma42; //gamma42; //gamma_hdr011; //gamma_hdr01; //gamma01; //gamma00520
+    dataG.tableR = gamma003; //gamma005//gamma42; //gamma_hdr011; //gamma_hdr01; //gamma01; //gamma00520
     dataG.tableG = dataG.tableR;
     dataG.tableB = dataG.tableR;
 
@@ -235,6 +235,7 @@ static void ALG_SIG_config(IALG_Handle handle)
         OSA_ERROR("Fail CSL_ipipeSetGammaConfig!!!\n");
 
     //Config RGB2RGB matrix
+
     rgb2rgb.matrix[0][0] = 256;
     rgb2rgb.matrix[0][1] = 0;
     rgb2rgb.matrix[0][2] = 0;
@@ -247,12 +248,25 @@ static void ALG_SIG_config(IALG_Handle handle)
     rgb2rgb.matrix[2][1] = 0;
     rgb2rgb.matrix[2][2] = 256;
 
+    /*
+    rgb2rgb.matrix[0][0] = 360;
+    rgb2rgb.matrix[0][1] = -153;
+    rgb2rgb.matrix[0][2] = 49;
+
+    rgb2rgb.matrix[1][0] = -92;
+    rgb2rgb.matrix[1][1] = 312;
+    rgb2rgb.matrix[1][2] = 36;
+
+    rgb2rgb.matrix[2][0] = 37;
+    rgb2rgb.matrix[2][1] = -338;
+    rgb2rgb.matrix[2][2] = 557;
+    */
     rgb2rgb.offset[0]    = 0;
     rgb2rgb.offset[1]    = 0;
     rgb2rgb.offset[2]    = 0;
 
-    if(DRV_ipipeSetRgb2Rgb(&rgb2rgb) != CSL_SOK)
-        OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
+    //if(DRV_ipipeSetRgb2Rgb(&rgb2rgb) != CSL_SOK)
+    //    OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
     if(DRV_ipipeSetRgb2Rgb2(&rgb2rgb) != CSL_SOK)
         OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
 
@@ -403,18 +417,18 @@ void SIG2A_applySettings(void)
 
 
     //Config RGB2RGB matrix
-    if(hn->Grgb2rgb.New !=  hn->Grgb2rgb.Old){
-        rgb2rgb.matrix[0][0] = hn->Grgb2rgb.New;
+    //if(hn->Grgb2rgb.New !=  hn->Grgb2rgb.Old){
+        rgb2rgb.matrix[0][0] = hn->Grgb2rgb.New; //hn->RGBgain[0]; //hn->Grgb2rgb.New;
         rgb2rgb.matrix[0][1] = 0;
         rgb2rgb.matrix[0][2] = 0;
 
         rgb2rgb.matrix[1][0] = 0;
-        rgb2rgb.matrix[1][1] = hn->Grgb2rgb.New;
+        rgb2rgb.matrix[1][1] = hn->Grgb2rgb.New; //hn->RGBgain[1]; //hn->Grgb2rgb.New;
         rgb2rgb.matrix[1][2] = 0;
 
         rgb2rgb.matrix[2][0] = 0;
         rgb2rgb.matrix[2][1] = 0;
-        rgb2rgb.matrix[2][2] = hn->Grgb2rgb.New;
+        rgb2rgb.matrix[2][2] = hn->Grgb2rgb.New; //hn->RGBgain[2]; //hn->Grgb2rgb.New;
 
         rgb2rgb.offset[0]    = 0;
         rgb2rgb.offset[1]    = 0;
@@ -426,7 +440,7 @@ void SIG2A_applySettings(void)
         //    OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
 
         hn->Grgb2rgb.Old = hn->Grgb2rgb.New;
-    }
+    //}
 }
 
 
@@ -625,7 +639,7 @@ int SIG_2A_config(IALG_Handle handle)
     hn->HhalfTh = 100;
     hn->Hhalf = 0;
 
-    hn->HmaxTh = 3800;
+    hn->HmaxTh = 3500;
     hn->RGB[0].MaxTh = hn->HmaxTh;
     hn->RGB[1].MaxTh = hn->HmaxTh;
     hn->RGB[2].MaxTh = hn->HmaxTh;

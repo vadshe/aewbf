@@ -56,10 +56,13 @@ typedef struct IAEWBF_SIG_Obj {
     //IAEWBF_Range isifGainRange[IAES_MAX_RANGES];
     //IAEWBF_Range YRange;
     //XDAS_UInt32 maxDiffY;
+
+    XDAS_UInt32 numHistory;
+
     XDAS_UInt32 targetBrightness;
     XDAS_UInt32 thrld;
     XDAS_UInt32 avgY;
-    XDAS_UInt32 numHistory;
+
     XDAS_UInt32 numSmoothSteps;
     XDAS_Int32 *historyBrightness;
     XDAS_UInt32 curBrightness;
