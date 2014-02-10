@@ -3,7 +3,6 @@
 #include "imageTunePriv.h"
 #include <drv_capture.h>
 #include <drv_display.h>
-#include "alg_aewbf.h"
 
 #define ALG_AEWB_DEBUG
 

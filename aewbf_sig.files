@@ -81,3 +81,4 @@ include/aewb/alg_aewb_priv.h
 include/awb_sig.h
 copy
 src/gamma.c
+src/aewbf_control.c

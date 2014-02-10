@@ -17,7 +17,7 @@ typedef struct ALG_AewbfObj {
     IAEWBF_OutArgs  OutArgs;
 
     IALG_Handle   handle_aewbf;
-    IALG_MemRec   memTab_aewbf[4];
+    IALG_MemRec   memTab_aewbf[2];
 
     unsigned char *weight;
 
@@ -90,10 +90,10 @@ typedef struct IAEWBF_SIG_Obj {
     IAEWBF_Param GIFIF;             //IFIF gain
     IAEWBF_Param Grgb2rgb;          //Grgb2rgb gain
     IAEWBF_Param Y;
-    IAEWBF_Param Hunif;             //Histogram uniformity
+    IAEWBF_Param Hmin;             //Histogram uniformity
     IAEWBF_Param Hmax;              //maximum of histogram
     Hist_Param  RGB[3];             //Histogram of BoxCar image
-    XDAS_UInt32 Hmin[2];            //min[0] minimum of histogram, min[1] the number of pixels below min[0]
+    //XDAS_UInt32 Hmin[2];            //min[0] minimum of histogram, min[1] the number of pixels below min[0]
     XDAS_UInt32 Hhalf;              //The median value of histogram
     XDAS_UInt32 HmaxTh;             //The max of histogram threshold
     XDAS_UInt32 HminTh;             //The min of histogram threshold
@@ -116,6 +116,10 @@ extern XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs
 
 extern XDAS_Int32 IAEWBF_SIG_control(IAEWBF_Handle handle, IAEWBF_Cmd id, IAEWBF_DynamicParams *params, IAEWBF_Status *status);
 
+int Get_BoxCar(IALG_Handle handle);
+void ALG_SIG_config(IALG_Handle handle);
+void SIG2A_applySettings(void);
+int SIG_2A_config(IALG_Handle handle);
 #ifdef __cplusplus
 extern "C" {
 #endif
