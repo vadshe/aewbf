@@ -84,7 +84,6 @@ void ALG_SIG_config(IALG_Handle handle)
         vl0 = vl1;
     }
     */
-
     if(CSL_ipipeSetGammaConfig(&gCSL_ipipeHndl, &dataG) != CSL_SOK)
         OSA_ERROR("Fail CSL_ipipeSetGammaConfig!!!\n");
 
@@ -105,8 +104,7 @@ void ALG_SIG_config(IALG_Handle handle)
     rgb2rgb1.offset[0]    = 0;
     rgb2rgb1.offset[1]    = 0;
     rgb2rgb1.offset[2]    = 0;
-
-
+    /*
     rgb2rgb2.matrix[0][0] = 256;
     rgb2rgb2.matrix[0][1] = 0;
     rgb2rgb2.matrix[0][2] = 0;
@@ -118,7 +116,7 @@ void ALG_SIG_config(IALG_Handle handle)
     rgb2rgb2.matrix[2][0] = 0;
     rgb2rgb2.matrix[2][1] = 0;
     rgb2rgb2.matrix[2][2] = 256;
-    /*
+    */
     rgb2rgb2.matrix[0][0] = 360;
     rgb2rgb2.matrix[0][1] = -153;
     rgb2rgb2.matrix[0][2] = 49;
@@ -130,7 +128,7 @@ void ALG_SIG_config(IALG_Handle handle)
     rgb2rgb2.matrix[2][0] = 37;
     rgb2rgb2.matrix[2][1] = -338;
     rgb2rgb2.matrix[2][2] = 557;
-    */
+
     rgb2rgb2.offset[0]    = 0;
     rgb2rgb2.offset[1]    = 0;
     rgb2rgb2.offset[2]    = 0;
@@ -230,13 +228,13 @@ void SIG2A_applySettings(void)
         dataG.bypassG = 0;
         dataG.bypassB = 0;
         dataG.tableR = hn->RGB[0].hist;
-        dataG.tableG = hn->RGB[1].hist;
-        dataG.tableB = hn->RGB[2].hist;
+        dataG.tableG = hn->RGB[0].hist;
+        dataG.tableB = hn->RGB[0].hist;
         //Setup gamma tables
         if(CSL_ipipeSetGammaConfig(&gCSL_ipipeHndl, &dataG) != CSL_SOK)
             OSA_ERROR("Fail CSL_ipipeSetGammaConfig!!!\n");
     //}
-        */
+    */
     //Seting Expouse
 
     //DRV_imgsSetEshutter(33333, 0);
@@ -257,7 +255,7 @@ void SIG2A_applySettings(void)
         //OSA_printf("SIG2A_applySettings: new = %d old = %d Rgain = %d Ggain = %d Bgain = %d\n",
         //           hn->GISIF.New, hn->GISIF.Old, hn->RGBgain[0], hn->RGBgain[1], hn->RGBgain[2]);
     }*/
-    DRV_isifSetDgain(hn->RGBgain[1] , hn->RGBgain[0], hn->RGBgain[2], hn->RGBgain[1], 0);
+    //DRV_isifSetDgain(hn->RGBgain[1] , hn->RGBgain[0], hn->RGBgain[2], hn->RGBgain[1], 0);
 
     if(hn->Offset.New != hn->Offset.Old) {
         DRV_ipipeSetWbOffset(-hn->Offset.New);
@@ -288,17 +286,17 @@ void SIG2A_applySettings(void)
 
     //Config RGB2RGB matrix
     //if(hn->Grgb2rgb.New !=  hn->Grgb2rgb.Old){
-        rgb2rgb.matrix[0][0] = hn->Grgb2rgb.New; //hn->RGBgain[0]; //hn->Grgb2rgb.New;
+        rgb2rgb.matrix[0][0] = hn->RGBgain[0]*hn->Grgb2rgb.New>>8; //hn->RGBgain[0]; //hn->Grgb2rgb.New;
         rgb2rgb.matrix[0][1] = 0;
         rgb2rgb.matrix[0][2] = 0;
 
         rgb2rgb.matrix[1][0] = 0;
-        rgb2rgb.matrix[1][1] = hn->Grgb2rgb.New; //hn->RGBgain[1]; //hn->Grgb2rgb.New;
+        rgb2rgb.matrix[1][1] = hn->RGBgain[1]*hn->Grgb2rgb.New>>8; //hn->RGBgain[1]; //hn->Grgb2rgb.New;
         rgb2rgb.matrix[1][2] = 0;
 
         rgb2rgb.matrix[2][0] = 0;
         rgb2rgb.matrix[2][1] = 0;
-        rgb2rgb.matrix[2][2] = hn->Grgb2rgb.New; //hn->RGBgain[2]; //hn->Grgb2rgb.New;
+        rgb2rgb.matrix[2][2] = hn->RGBgain[2]*hn->Grgb2rgb.New>>8; //hn->RGBgain[2]; //hn->Grgb2rgb.New;
 
         rgb2rgb.offset[0]    = 0;
         rgb2rgb.offset[1]    = 0;
@@ -505,19 +503,19 @@ int SIG_2A_config(IALG_Handle handle)
     hn->Hmax.New = 0;
     hn->Hmax.Old = 0;
 
-    hn->RGBgain[0] = 512;
-    hn->RGBgain[1] = 512;
-    hn->RGBgain[2] = 512;
+    hn->RGBgain[0] = 256;
+    hn->RGBgain[1] = hn->RGBgain[0];
+    hn->RGBgain[2] = hn->RGBgain[0];
 
     hn->HhalfTh = 100;
     hn->Hhalf = 0;
 
-    hn->HmaxTh = 3500;
+    hn->HmaxTh = 4000;
     hn->RGB[0].MaxTh = hn->HmaxTh;
     hn->RGB[1].MaxTh = hn->HmaxTh;
     hn->RGB[2].MaxTh = hn->HmaxTh;
     hn->HminTh = 0;
-    hn->SatTh = hn->w*hn->h*3/50;
+    hn->SatTh = hn->w*hn->h/50;
 
 
     //First value of dymanic parameters
