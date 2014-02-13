@@ -123,8 +123,8 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
     Uint32 hsz = ALG_SENSOR_BITS, leave_frames = 5;
     Uint32 sum, mins, minr, minb, maxs, maxg, max_rgb, tmp, th = hn->SatTh, thh, hc = 0, min, mini;
     Uint32 cn = 0, fp = 512, sp = 2304, fg = 1, sg = 7;
-    //Uint32 hist[hsz];
-    Uint32 minh[16];
+    Uint32 hist[hsz];
+    //Uint32 minh[16];
     Uint32 gr, gb;
     int GN[3];
 
@@ -137,7 +137,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
 
     if(!(frames%leave_frames) && frames > 6){
         //Clear histogram
-        memset(minh, 0, sizeof(Uint32)*16);
+        memset(hist, 0, sizeof(Uint32)*hsz);
         memset(hn->RGB[0].hist, 0, sizeof(Uint32)*hsz);
         memset(hn->RGB[1].hist, 0, sizeof(Uint32)*hsz);
         memset(hn->RGB[2].hist, 0, sizeof(Uint32)*hsz);
@@ -154,10 +154,11 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             hn->RGB[0].hist[r>>3]++;
             hn->RGB[1].hist[g>>3]++;
             hn->RGB[2].hist[b>>3]++;
-
+            /*
             if(r < 16) minh[r]++;
             if(g < 16) minh[g]++;
             if(b < 16) minh[b]++;
+            */
 
             if(0){ //HDR
 
@@ -182,10 +183,10 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                 }
             } else {
                 for(j=0; j < ns; j++) {
-                    //GB[j] += abs(g - (b*(512 + GN[j])>>9));
-                    //GR[j] += abs(g - (r*(512 + GN[j])>>9));
-                    GB[j] += abs(g - (b*(hn->RGBgain[2] + GN[j])>>8));
-                    GR[j] += abs(g - (r*(hn->RGBgain[0] + GN[j])>>8));
+                    GB[j] += abs(g - (b*(512 + GN[j])>>9));
+                    GR[j] += abs(g - (r*(512 + GN[j])>>9));
+                    //GB[j] += abs(g - (b*(hn->RGBgain[2] + GN[j])>>8));
+                    //GR[j] += abs(g - (r*(hn->RGBgain[0] + GN[j])>>8));
                 }
             }
 
@@ -209,7 +210,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
 
         //for(j=0; j < ns; j++) { GR[j] = GR[j]/sz; GB[j] = GB[j]/sz; }
 
-        //for(i=0; i < hsz; i++) hist[i] = hn->RGB[0].hist[i] + hn->RGB[1].hist[i] + hn->RGB[2].hist[i];
+        for(i=0; i < hsz; i++) hist[i] = hn->RGB[0].hist[i] + hn->RGB[1].hist[i] + hn->RGB[2].hist[i];
         //for(i=0; i < hsz; i++) dprintf("%d   Y = %d R = %d G = %d B = %d\n", i, hist[i], hn->RGB[0].hist[i], hn->RGB[1].hist[i], hn->RGB[2].hist[i]);
 
         /*
@@ -233,7 +234,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         hn->Hhalf = ((i-1)<<3); //Half of histogram
         //hn->Hhalf = (i<<12)/hn->GISIF.New; //Half of histogram in real sensor value
         */
-
+        /*
         //Find max in color histogram
         for(j=0; j < 3; j++){
             sum = 0;
@@ -254,6 +255,14 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                 hn->RGB[j].max = hn->RGB[j].MaxTh; hn->RGB[j].maxs = sum;
             }
         }
+        */
+        //Find max in color histogram
+        sum = 0;
+        for(i=0; sum < hn->SatTh; i++) sum += hist[i];
+        hn->Hmin.New = (i-1)<<3; hn->Hmin.Sat = sum;
+        sum = 0;
+        for(i=hsz-1; sum < hn->SatTh; i--) sum += hist[i];
+        hn->Hmax.New = (i+1)<<3; hn->Hmax.Sat = sum;
 
         //Check Y history of difference
         if(Y > hn->Y.Max) hn->Y.Max = Y;
@@ -267,9 +276,10 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         dprintf("GR[0] = %u GR[1] = %u GR[2] = %u\n", GR[0], GR[1], GR[2]);
         dprintf("GB[0] = %u GB[1] = %u GB[2] = %u\n", GB[0], GB[1], GB[2]);
         dprintf("GN[0] = %d GN[1] = %d GN[2] = %d\n", GN[0], GN[1], GN[2]);
-        dprintf("Rmin = %u Rmins = %u Rmax = %u Rmaxs = %u  \n", hn->RGB[0].min, hn->RGB[0].mins, hn->RGB[0].max, hn->RGB[0].maxs);
-        dprintf("Gmin = %u Gmins = %u Gmax = %u Gmaxs = %u  \n", hn->RGB[1].min, hn->RGB[1].mins, hn->RGB[1].max, hn->RGB[1].maxs);
-        dprintf("Bmin = %u Bmins = %u Bmax = %u Bmaxs = %u  \n", hn->RGB[2].min, hn->RGB[2].mins, hn->RGB[2].max, hn->RGB[2].maxs);
+        //dprintf("Rmin = %u Rmins = %u Rmax = %u Rmaxs = %u  \n", hn->RGB[0].min, hn->RGB[0].mins, hn->RGB[0].max, hn->RGB[0].maxs);
+        //dprintf("Gmin = %u Gmins = %u Gmax = %u Gmaxs = %u  \n", hn->RGB[1].min, hn->RGB[1].mins, hn->RGB[1].max, hn->RGB[1].maxs);
+        //dprintf("Bmin = %u Bmins = %u Bmax = %u Bmaxs = %u  \n", hn->RGB[2].min, hn->RGB[2].mins, hn->RGB[2].max, hn->RGB[2].maxs);
+        dprintf("min = %u mins = %u max = %u maxs = %u  \n", hn->Hmin.New, hn->Hmin.Sat, hn->Hmax.New, hn->Hmax.Sat);
 #endif
 #ifdef AE_DEBUG_PRINTS
         dprintf("Y.Min = %d Y.Max = %d Y.Diff = %d Y.Th = %d\n", hn->Y.Min, hn->Y.Max, hn->Y.Diff, hn->Y.Th);
@@ -308,12 +318,22 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
 
         //hn->RGBgain[0] = 1040;
         //Find histogram minimum and maximum
+        /*
         hn->Hmin.New = hn->RGB[0].min*hn->RGBgain[0]>>8;
         hn->Hmax.New = hn->RGB[0].max*hn->RGBgain[0]>>8;
         for(j=1; j < 3; j++){
             if(hn->Hmax.New < hn->RGB[j].max*hn->RGBgain[j]>>8) hn->Hmax.New = hn->RGB[j].max*hn->RGBgain[j]>>8;
             if(hn->Hmin.New > hn->RGB[j].min*hn->RGBgain[j]>>8) hn->Hmin.New = hn->RGB[j].min*hn->RGBgain[j]>>8;
         }
+        */
+        /*
+        hn->Hmin.New = hn->RGB[0].min;
+        hn->Hmax.New = hn->RGB[0].max;
+        for(j=1; j < 3; j++){
+            if(hn->Hmax.New < hn->RGB[j].max) hn->Hmax.New = hn->RGB[j].max;
+            if(hn->Hmin.New > hn->RGB[j].min) hn->Hmin.New = hn->RGB[j].min;
+        }
+        */
 
         //AE algorithm
         //Expouse and gain
@@ -392,7 +412,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                 frame_count = 0;
             }
         }
-        if ( FPShigh == 0 && IRcutClose == 1 && Y > 180) {
+        if ( FPShigh == 0 && IRcutClose == 1 && Y > 170) {
             frame_count += leave_frames;
             if (frame_count > 100) {
                 FPShigh = 1;
@@ -430,9 +450,9 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         //Check the if need change gain
         int upix, dpix, dgain;
 
-        sum = 0;
-        for(i=0; i < 16; i++) sum += minh[i];
-
+        //sum = 0;
+        //for(i=0; i < 16; i++) sum += minh[i];
+        /*
         thh = hn->Hmax.New>>3;
         upix = 0;
         for(i=hsz-1; i > thh; i--) {
@@ -440,25 +460,28 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             upix += hn->RGB[1].hist[i];
             upix += hn->RGB[2].hist[i];
         }
+        dgain = hn->GIFIF.New>>9;
+        dpix = 0;
+        for(i=15; i > 15-dgain; i--) dpix += minh[i];
+        */
 
         hn->Offset.New = hn->Hmin.New; // - (hn->Hmin.New>>2);
         //hn->Offset.New = 0;
         //if(Y) hn->GIFIF.New = ((1000)<<9)/(Y - hn->Offset.New);
-        if(hn->Hmax.New) hn->GIFIF.New = ((hn->HmaxTh-1000)<<9)/(hn->Hmax.New - hn->Offset.New);
+        if(hn->Hmax.New) hn->GIFIF.New = ((hn->HmaxTh)<<9)/(hn->Hmax.New - hn->Offset.New);
         //hn->GIFIF.New = (hn->GIFIF.New<<8)/hn->RGBgain[0];
 
-        dgain = hn->GIFIF.New>>9;
-        dpix = 0;
-        for(i=15; i > 15-dgain; i--) dpix += minh[i];
 
         //hn->GIFIF.New = 512;
         //hn->Offset.New = 0;
         //if(hn->Hmax.New) hn->GIFIF.New = 512;
 
         //Find maximum gain
+        /*
         maxg = hn->RGBgain[0] > hn->RGBgain[1] ? hn->RGBgain[0] : hn->RGBgain[1];
         maxg = maxg > hn->RGBgain[2] ? maxg : hn->RGBgain[2];
         max_rgb = hn->Grgb2rgb.Range.max/maxg<<8;
+        */
 
         if(hn->GIFIF.New > hn->GIFIF.Range.max){
             //hn->Grgb2rgb.New = (hn->GIFIF.New - hn->GIFIF.Range.max)>>1;
@@ -470,7 +493,8 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
 
         hn->GIFIF.New = hn->GIFIF.New > hn->GIFIF.Range.max ? hn->GIFIF.Range.max : hn->GIFIF.New;
         hn->GIFIF.New = hn->GIFIF.New < hn->GIFIF.Range.min ? hn->GIFIF.Range.min : hn->GIFIF.New;
-        hn->Grgb2rgb.New = hn->Grgb2rgb.New > max_rgb ? max_rgb : hn->Grgb2rgb.New;
+        //hn->Grgb2rgb.New = hn->Grgb2rgb.New > max_rgb ? max_rgb : hn->Grgb2rgb.New;
+        hn->Grgb2rgb.New = hn->Grgb2rgb.New > hn->Grgb2rgb.Range.max ? hn->Grgb2rgb.Range.max : hn->Grgb2rgb.New;
         hn->Grgb2rgb.New = hn->Grgb2rgb.New < hn->Grgb2rgb.Range.min ? hn->Grgb2rgb.Range.min : hn->Grgb2rgb.New;
 
 #ifdef AE_DEBUG_PRINTS

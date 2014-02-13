@@ -258,7 +258,7 @@ void SIG2A_applySettings(void)
         //OSA_printf("SIG2A_applySettings: new = %d old = %d Rgain = %d Ggain = %d Bgain = %d\n",
         //           hn->GISIF.New, hn->GISIF.Old, hn->RGBgain[0], hn->RGBgain[1], hn->RGBgain[2]);
     }*/
-    //DRV_isifSetDgain(hn->RGBgain[1] , hn->RGBgain[0], hn->RGBgain[2], hn->RGBgain[1], 0);
+    DRV_isifSetDgain(hn->RGBgain[1] , hn->RGBgain[0], hn->RGBgain[2], hn->RGBgain[1], 0);
 
     if(hn->Offset.New != hn->Offset.Old) {
         DRV_ipipeSetWbOffset(-hn->Offset.New);
@@ -289,17 +289,17 @@ void SIG2A_applySettings(void)
 
     //Config RGB2RGB matrix
     //if(hn->Grgb2rgb.New !=  hn->Grgb2rgb.Old){
-        rgb2rgb.matrix[0][0] = hn->RGBgain[0]*hn->Grgb2rgb.New>>8; //hn->RGBgain[0]; //hn->Grgb2rgb.New;
+        rgb2rgb.matrix[0][0] = hn->Grgb2rgb.New; //hn->RGBgain[0]*hn->Grgb2rgb.New>>8; //hn->RGBgain[0]; //hn->Grgb2rgb.New;
         rgb2rgb.matrix[0][1] = 0;
         rgb2rgb.matrix[0][2] = 0;
 
         rgb2rgb.matrix[1][0] = 0;
-        rgb2rgb.matrix[1][1] = hn->RGBgain[1]*hn->Grgb2rgb.New>>8; //hn->RGBgain[1]; //hn->Grgb2rgb.New;
+        rgb2rgb.matrix[1][1] = hn->Grgb2rgb.New; //hn->RGBgain[1]*hn->Grgb2rgb.New>>8; //hn->RGBgain[1]; //hn->Grgb2rgb.New;
         rgb2rgb.matrix[1][2] = 0;
 
         rgb2rgb.matrix[2][0] = 0;
         rgb2rgb.matrix[2][1] = 0;
-        rgb2rgb.matrix[2][2] = hn->RGBgain[2]*hn->Grgb2rgb.New>>8; //hn->RGBgain[2]; //hn->Grgb2rgb.New;
+        rgb2rgb.matrix[2][2] = hn->Grgb2rgb.New; //hn->RGBgain[2]*hn->Grgb2rgb.New>>8; //hn->RGBgain[2]; //hn->Grgb2rgb.New;
 
         rgb2rgb.offset[0]    = 0;
         rgb2rgb.offset[1]    = 0;
@@ -506,7 +506,7 @@ int SIG_2A_config(IALG_Handle handle)
     hn->Hmax.New = 0;
     hn->Hmax.Old = 0;
 
-    hn->RGBgain[0] = 256;
+    hn->RGBgain[0] = 512;
     hn->RGBgain[1] = hn->RGBgain[0];
     hn->RGBgain[2] = hn->RGBgain[0];
 
