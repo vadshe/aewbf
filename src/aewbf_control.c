@@ -14,6 +14,7 @@ extern CSL_IpipeObj gCSL_ipipeHndl;   //For gamma and rgb2rgb
 
 extern int gAePriorityMode, gBWMode, gDayNight, gIRCut, defaultFPS, gFlicker;
 extern int IRcutClose, FPShigh;
+extern int gHDR;
 extern Uint32 gamma42[], gamma00520[], gamma_hdr011[], gamma_hdr01[], gamma01[], gamma005[], gamma003[];
 
 int Get_BoxCar(IALG_Handle handle)
@@ -104,7 +105,7 @@ void ALG_SIG_config(IALG_Handle handle)
     rgb2rgb1.offset[0]    = 0;
     rgb2rgb1.offset[1]    = 0;
     rgb2rgb1.offset[2]    = 0;
-    /*
+
     rgb2rgb2.matrix[0][0] = 256;
     rgb2rgb2.matrix[0][1] = 0;
     rgb2rgb2.matrix[0][2] = 0;
@@ -116,18 +117,20 @@ void ALG_SIG_config(IALG_Handle handle)
     rgb2rgb2.matrix[2][0] = 0;
     rgb2rgb2.matrix[2][1] = 0;
     rgb2rgb2.matrix[2][2] = 256;
-    */
-    rgb2rgb2.matrix[0][0] = 360;
-    rgb2rgb2.matrix[0][1] = -153;
-    rgb2rgb2.matrix[0][2] = 49;
 
-    rgb2rgb2.matrix[1][0] = -92;
-    rgb2rgb2.matrix[1][1] = 312;
-    rgb2rgb2.matrix[1][2] = 36;
+    if(!gHDR && strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0){
+        rgb2rgb2.matrix[0][0] = 360;
+        rgb2rgb2.matrix[0][1] = -153;
+        rgb2rgb2.matrix[0][2] = 49;
 
-    rgb2rgb2.matrix[2][0] = 37;
-    rgb2rgb2.matrix[2][1] = -338;
-    rgb2rgb2.matrix[2][2] = 557;
+        rgb2rgb2.matrix[1][0] = -92;
+        rgb2rgb2.matrix[1][1] = 312;
+        rgb2rgb2.matrix[1][2] = 36;
+
+        rgb2rgb2.matrix[2][0] = 37;
+        rgb2rgb2.matrix[2][1] = -338;
+        rgb2rgb2.matrix[2][2] = 557;
+    }
 
     rgb2rgb2.offset[0]    = 0;
     rgb2rgb2.offset[1]    = 0;
@@ -510,7 +513,7 @@ int SIG_2A_config(IALG_Handle handle)
     hn->HhalfTh = 100;
     hn->Hhalf = 0;
 
-    hn->HmaxTh = 4000;
+    hn->HmaxTh = 3500;
     hn->RGB[0].MaxTh = hn->HmaxTh;
     hn->RGB[1].MaxTh = hn->HmaxTh;
     hn->RGB[2].MaxTh = hn->HmaxTh;

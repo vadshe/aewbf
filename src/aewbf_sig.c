@@ -123,7 +123,8 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
     Uint32 hsz = ALG_SENSOR_BITS, leave_frames = 5;
     Uint32 sum, mins, minr, minb, maxs, maxg, max_rgb, tmp, th = hn->SatTh, thh, hc = 0, min, mini;
     Uint32 cn = 0, fp = 512, sp = 2304, fg = 1, sg = 7;
-    Uint32 hist[hsz];
+    //Uint32 hist[hsz];
+    Uint32 minh[16];
     Uint32 gr, gb;
     int GN[3];
 
@@ -136,7 +137,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
 
     if(!(frames%leave_frames) && frames > 6){
         //Clear histogram
-        memset(hist, 0, sizeof(Uint32)*hsz);
+        memset(minh, 0, sizeof(Uint32)*16);
         memset(hn->RGB[0].hist, 0, sizeof(Uint32)*hsz);
         memset(hn->RGB[1].hist, 0, sizeof(Uint32)*hsz);
         memset(hn->RGB[2].hist, 0, sizeof(Uint32)*hsz);
@@ -154,36 +155,45 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             hn->RGB[1].hist[g>>3]++;
             hn->RGB[2].hist[b>>3]++;
 
-            if(1){ //HDR
+            if(r < 16) minh[r]++;
+            if(g < 16) minh[g]++;
+            if(b < 16) minh[b]++;
+
+            if(0){ //HDR
 
                 //R = r*gr>>18; G = g; B = b*gb>>18;
-                if(r > sp) r = ((r - sp)<<sg) + sp;
-                else if(r > fp) r = ((r - fp)<<fg) + fp;
+                //if(r > sp) r = ((r - sp)<<sg) + sp;
+                //else
+                //if(r > fp) r = ((r - fp)<<fg) + fp;
 
-                if(g > sp) g = ((g - sp)<<sg) + sp;
-                else if(g > fp) g = ((g - fp)<<fg) + fp;
+                //if(g > sp) g = ((g - sp)<<sg) + sp;
+                //else
+                //if(g > fp) g = ((g - fp)<<fg) + fp;
 
-                if(b > sp) b = ((b - sp)<<sg) + sp;
-                else if(b > fp) b = ((b - fp)<<fg) + fp;
+                //if(b > sp) b = ((b - sp)<<sg) + sp;
+                //else
+                //if(b > fp) b = ((b - fp)<<fg) + fp;
 
+                if(r > fp && g > fp && b > fp){
+                    for(j=0; j < ns; j++) {
+                        GB[j] += abs(g - (b*(hn->RGBgain[2] + GN[j])>>8));
+                        GR[j] += abs(g - (r*(hn->RGBgain[0] + GN[j])>>8));
+                    }
+                }
+            } else {
                 for(j=0; j < ns; j++) {
+                    //GB[j] += abs(g - (b*(512 + GN[j])>>9));
+                    //GR[j] += abs(g - (r*(512 + GN[j])>>9));
                     GB[j] += abs(g - (b*(hn->RGBgain[2] + GN[j])>>8));
                     GR[j] += abs(g - (r*(hn->RGBgain[0] + GN[j])>>8));
                 }
-            } else {
-                //if(Y > Yold){
-                    for(j=0; j < ns; j++) {
-                        GB[j] += abs(g - (b*(512 + GN[j])>>9));
-                        GR[j] += abs(g - (r*(512 + GN[j])>>9));
-                    }
-                //}
             }
 
             //r = r > 1024 ? (r<<2) - c : r;
             //g = g > 1024 ? (g<<2) - c : g;
             //b = b > 1024 ? (b<<2) - c : b;
 
-            hist[Y1>>3]++;
+            //hist[Y1>>3]++;
 
 
             //B += b;
@@ -232,7 +242,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             //for(i=0; !hn->RGB[j].hist[i]; i++) ;
             //hn->RGB[j].min = i<<3; hn->RGB[j].mins = hn->RGB[j].hist[i];
             sum = 0;
-            if(gHDR){ // gHDR
+            if(1){ // gHDR
                 for(i=hsz-1; sum < hn->SatTh; i--) sum += hn->RGB[j].hist[i];
                 hn->RGB[j].max = (i+1)<<3; hn->RGB[j].maxs = sum;
                 //for(i=hsz-1; !hn->RGB[j].hist[i]; i--);
@@ -267,11 +277,52 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         dprintf("Exp.Old = %d Exp.New = %d Offset.Old = %d Offset.New = %d\n",
                 hn->Exp.Old, hn->Exp.New, hn->Offset.Old, hn->Offset.New);
 #endif
+        //White balance algorithm
+        //if(hn->Exp.New == hn->Exp.Old){
+        if(1){
+            min = GR[0]; minr = 0;
+            for(j=1; j < ns; j++){
+                if(GR[j] < min) { min = GR[j]; minr = j; }
+            }
+            min = GB[0]; minb = 0;
+            for(j=1; j < ns; j++){
+                if(GB[j] < min) { min = GB[j]; minb = j; }
+            }
+            if(minr != 1){
+                hn->RGBgain[0] = hn->RGBgain[0] + GN[minr];
+                dprintf("mini = %d GN[mini] = %d hn->RGBgain[0] = %d \n", minr, GN[minr], hn->RGBgain[0]);
+            }
+            if(minb != 1){
+                hn->RGBgain[2] = hn->RGBgain[2] + GN[minb];
+                dprintf("mini = %d GN[mini] = %d hn->RGBgain[2] = %d \n", minb, GN[minb], hn->RGBgain[2]);
+            }
+            //}
+
+            //for(j=0; j < ns; j++) GN[j] = GN[j]>>1;
+        }
+        //Check maximum and minimum
+        hn->RGBgain[0] = hn->RGBgain[0] > hn->GISIF.Range.max ? hn->GISIF.Range.max : hn->RGBgain[0];
+        hn->RGBgain[0] = hn->RGBgain[0] < hn->GISIF.Range.min ? hn->GISIF.Range.min : hn->RGBgain[0];
+        hn->RGBgain[2] = hn->RGBgain[2] > hn->GISIF.Range.max ? hn->GISIF.Range.max : hn->RGBgain[2];
+        hn->RGBgain[2] = hn->RGBgain[2] < hn->GISIF.Range.min ? hn->GISIF.Range.min : hn->RGBgain[2];
+
+        //hn->RGBgain[0] = 1040;
+        //Find histogram minimum and maximum
+        hn->Hmin.New = hn->RGB[0].min*hn->RGBgain[0]>>8;
+        hn->Hmax.New = hn->RGB[0].max*hn->RGBgain[0]>>8;
+        for(j=1; j < 3; j++){
+            if(hn->Hmax.New < hn->RGB[j].max*hn->RGBgain[j]>>8) hn->Hmax.New = hn->RGB[j].max*hn->RGBgain[j]>>8;
+            if(hn->Hmin.New > hn->RGB[j].min*hn->RGBgain[j]>>8) hn->Hmin.New = hn->RGB[j].min*hn->RGBgain[j]>>8;
+        }
+
         //AE algorithm
         //Expouse and gain
         if(1) { //HDR
-            if(hn->Hmin.New > 20) {
-                hn->Exp.New = hn->Exp.Old*20/hn->Hmin.New;
+            if(hn->Hmin.New > 30) {
+                hn->Exp.New = hn->Exp.Old*30/hn->Hmin.New;
+                //if((hn->Hmin.New>>2) < 30) hn->Exp.New = hn->Exp.Old*30/hn->Hmin.New;
+                //else hn->Exp.New = hn->Exp.Old>>1;
+
                 hn->Y.Diff = 0;
                 hn->Y.Max = Y;
                 hn->Y.Min = Y;
@@ -288,7 +339,6 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                         hn->Exp.New = hn->Exp.Range.max;
                     }
                 }
-
                 //down = 0;
             } //else down = 0;
         } else {
@@ -330,43 +380,6 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             } //else down = 0;
         }
 
-        //White balance algorithm
-        //if(hn->Exp.New == hn->Exp.Old){
-        if(1){
-            min = GR[0]; minr = 0;
-            for(j=1; j < ns; j++){
-                if(GR[j] < min) { min = GR[j]; minr = j; }
-            }
-            min = GB[0]; minb = 0;
-            for(j=1; j < ns; j++){
-                if(GB[j] < min) { min = GB[j]; minb = j; }
-            }
-            if(minr != 1){
-                hn->RGBgain[0] = hn->RGBgain[0] + GN[minr];
-                dprintf("mini = %d GN[mini] = %d hn->RGBgain[0] = %d \n", minr, GN[minr], hn->RGBgain[0]);
-            }
-            if(minb != 1){
-                hn->RGBgain[2] = hn->RGBgain[2] + GN[minb];
-                dprintf("mini = %d GN[mini] = %d hn->RGBgain[2] = %d \n", minb, GN[minb], hn->RGBgain[2]);
-            }
-            //}
-
-            //for(j=0; j < ns; j++) GN[j] = GN[j]>>1;
-        }
-        //Check maximum and minimum
-        hn->RGBgain[0] = hn->RGBgain[0] > hn->GISIF.Range.max ? hn->GISIF.Range.max : hn->RGBgain[0];
-        hn->RGBgain[0] = hn->RGBgain[0] < hn->GISIF.Range.min ? hn->GISIF.Range.min : hn->RGBgain[0];
-        hn->RGBgain[2] = hn->RGBgain[2] > hn->GISIF.Range.max ? hn->GISIF.Range.max : hn->RGBgain[2];
-        hn->RGBgain[2] = hn->RGBgain[2] < hn->GISIF.Range.min ? hn->GISIF.Range.min : hn->RGBgain[2];
-
-        //hn->RGBgain[0] = 1040;
-        //Find histogram minimum and maximum
-        hn->Hmin.New = hn->RGB[0].min*hn->RGBgain[0]>>8;
-        hn->Hmax.New = hn->RGB[0].max*hn->RGBgain[0]>>8;
-        for(j=1; j < 3; j++){
-            if(hn->Hmax.New < hn->RGB[j].max*hn->RGBgain[j]>>8) hn->Hmax.New = hn->RGB[j].max*hn->RGBgain[j]>>8;
-            if(hn->Hmin.New > hn->RGB[j].min*hn->RGBgain[j]>>8) hn->Hmin.New = hn->RGB[j].min*hn->RGBgain[j]>>8;
-        }
 
         //hn->RGBgain[2] = 672;
         //Low light condition
@@ -414,11 +427,29 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             hn->Y.Min = Y;
         }
 
+        //Check the if need change gain
+        int upix, dpix, dgain;
+
+        sum = 0;
+        for(i=0; i < 16; i++) sum += minh[i];
+
+        thh = hn->Hmax.New>>3;
+        upix = 0;
+        for(i=hsz-1; i > thh; i--) {
+            upix += hn->RGB[0].hist[i];
+            upix += hn->RGB[1].hist[i];
+            upix += hn->RGB[2].hist[i];
+        }
+
         hn->Offset.New = hn->Hmin.New; // - (hn->Hmin.New>>2);
         //hn->Offset.New = 0;
         //if(Y) hn->GIFIF.New = ((1000)<<9)/(Y - hn->Offset.New);
         if(hn->Hmax.New) hn->GIFIF.New = ((hn->HmaxTh-1000)<<9)/(hn->Hmax.New - hn->Offset.New);
         //hn->GIFIF.New = (hn->GIFIF.New<<8)/hn->RGBgain[0];
+
+        dgain = hn->GIFIF.New>>9;
+        dpix = 0;
+        for(i=15; i > 15-dgain; i--) dpix += minh[i];
 
         //hn->GIFIF.New = 512;
         //hn->Offset.New = 0;
@@ -443,6 +474,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         hn->Grgb2rgb.New = hn->Grgb2rgb.New < hn->Grgb2rgb.Range.min ? hn->Grgb2rgb.Range.min : hn->Grgb2rgb.New;
 
 #ifdef AE_DEBUG_PRINTS
+        dprintf("sum = %d dpix = %d upix = %d\n", sum, dpix, upix);
         dprintf("hn->Hmin.New = %d hn->Hmin.Old = %d hn->Hmax.New  = %d hn->Hmax.Old = %d \n",
                 hn->Hmin.New, hn->Hmin.Old, hn->Hmax.New, hn->Hmax.Old);
         dprintf("gain = %d grgb2rgb = %d offset = %d \n", hn->GIFIF.New, hn->Grgb2rgb.New, hn->Offset.New);
@@ -480,7 +512,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         //for(i=hmax; i <= dm; i++) p[i] = 1023;
 
         //Integral
-
+        /*
         for(j=0; j < 1; j++){
 
             sum = 0;
@@ -506,7 +538,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                 vl0 = vl1;
             }
         }
-
+        */
         /*
         for(k=0; k < 3; k++){
             p[0] = 0; p[dm] = dm-1;
