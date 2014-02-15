@@ -10,7 +10,7 @@
 #define RY    0x4d
 #define GY    0x96
 #define BY    0x1d
-#define ALG_SENSOR_BITS (1<<9)
+#define ALG_SENSOR_BITS (1<<12)
 
 typedef struct ALG_AewbfObj {
     IAEWBF_InArgs   InArgs;
@@ -92,6 +92,7 @@ typedef struct IAEWBF_SIG_Obj {
     IAEWBF_Param Y;
     IAEWBF_Param Hmin;             //Histogram uniformity
     IAEWBF_Param Hmax;              //maximum of histogram
+    IAEWBF_Param Fill;              //Optimal filling of histogram
     Hist_Param  RGB[3];             //Histogram of BoxCar image
     //XDAS_UInt32 Hmin[2];            //min[0] minimum of histogram, min[1] the number of pixels below min[0]
     XDAS_UInt32 Hhalf;              //The median value of histogram

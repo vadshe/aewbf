@@ -481,6 +481,17 @@ int SIG_2A_config(IALG_Handle handle)
     hn->Offset.Th = 10; //10%
     hn->Offset.Diff = 0;
 
+    //ISIF offset setup
+    hn->Fill.Step = 10;
+    hn->Fill.Old = 10;
+    hn->Fill.New = 10;
+    hn->Fill.Max = 0;
+    hn->Fill.Min = 0;
+    hn->Fill.Range.min = 1;
+    hn->Fill.Range.max = 1024;
+    hn->Fill.Th = 10; //10%
+    hn->Fill.Diff = 0;
+
     hn->Grgb2rgb.Old = 256;
     hn->Grgb2rgb.New = 256;
     hn->Grgb2rgb.Range.min = 1;
