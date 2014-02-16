@@ -165,8 +165,8 @@ void SIG2A_applySettings(void)
     DRV_IpipeWb ipipeWb;
     CSL_IpipeRgb2RgbConfig rgb2rgb;
 
-    OSA_printf("SIG2A_apply: gAePriorityMode = %d gBWMode = %d gDayNight =%d gIRCut = %d hn->gIRCut = %d defaultFPS = %d IRcutClose = %d hn->IRcutClose = %d FPShigh = %d hn->FPShigh = %d\n",
-               gAePriorityMode, gBWMode, gDayNight, gIRCut, hn->gIRCut, defaultFPS, IRcutClose, hn->IRcutClose, FPShigh, hn->FPShigh);
+    OSA_printf("SIG2A_apply: gFlicker = %d gAePriorityMode = %d gBWMode = %d gDayNight =%d gIRCut = %d hn->gIRCut = %d defaultFPS = %d IRcutClose = %d hn->IRcutClose = %d FPShigh = %d hn->FPShigh = %d\n",
+               gFlicker, gAePriorityMode, gBWMode, gDayNight, gIRCut, hn->gIRCut, defaultFPS, IRcutClose, hn->IRcutClose, FPShigh, hn->FPShigh);
 
     //IR-cut dynamic change
     if(gIRCut != hn->gIRCut) {
@@ -222,6 +222,21 @@ void SIG2A_applySettings(void)
         hn->IRcutClose = IRcutClose;
     }
 
+    //Flicker
+    if (gFlicker != hn->gFlicker) {
+        if(gFlicker == VIDEO_NTSC) {		// 60 Hz flicker
+            hn->Exp.Step = 8333; 	// Exposure stepsize
+        } else if(gFlicker == VIDEO_PAL) {	// 50 Hz flicker
+            hn->Exp.Step = 10000; 	// Exposure stepsize
+        } else {
+            hn->Exp.Step = 1;
+
+        }
+        hn->Exp.Max = 1000000/defaultFPS;
+        hn->Exp.New = (hn->Exp.Old/hn->Exp.Step)*hn->Exp.Step;
+        hn->gFlicker = gFlicker;
+    }
+
     //Config gamma correction tables
     /*
    // if(hn->GISIF.New != hn->GISIF.Old || hn->Exp.New != hn->Exp.Old){
@@ -258,7 +273,10 @@ void SIG2A_applySettings(void)
         //OSA_printf("SIG2A_applySettings: new = %d old = %d Rgain = %d Ggain = %d Bgain = %d\n",
         //           hn->GISIF.New, hn->GISIF.Old, hn->RGBgain[0], hn->RGBgain[1], hn->RGBgain[2]);
     }*/
-    DRV_isifSetDgain(hn->RGBgain[1] , hn->RGBgain[0], hn->RGBgain[2], hn->RGBgain[1], 0);
+    //if(hn->GISIF.New != hn->GISIF.Old) {
+        DRV_isifSetDgain(hn->RGBgain[1] , hn->RGBgain[0], hn->RGBgain[2], hn->RGBgain[1], 0);
+        //hn->GISIF.Old = hn->GISIF.New;
+    //}
 
     if(hn->Offset.New != hn->Offset.Old) {
         DRV_ipipeSetWbOffset(-hn->Offset.New);
@@ -288,7 +306,7 @@ void SIG2A_applySettings(void)
 
 
     //Config RGB2RGB matrix
-    //if(hn->Grgb2rgb.New !=  hn->Grgb2rgb.Old){
+    if(hn->Grgb2rgb.New !=  hn->Grgb2rgb.Old){
         rgb2rgb.matrix[0][0] = hn->Grgb2rgb.New; //hn->RGBgain[0]*hn->Grgb2rgb.New>>8; //hn->RGBgain[0]; //hn->Grgb2rgb.New;
         rgb2rgb.matrix[0][1] = 0;
         rgb2rgb.matrix[0][2] = 0;
@@ -311,133 +329,32 @@ void SIG2A_applySettings(void)
         //    OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
 
         hn->Grgb2rgb.Old = hn->Grgb2rgb.New;
-    //}
+    }
 }
 
 
 int SIG_2A_config(IALG_Handle handle)
 {
     IAEWBF_SIG_Obj *hn = (IAEWBF_SIG_Obj *)handle;
-    int i, stepSize, sensorExposureMax;
+    int stepSize, sensorExposureMax;
 
-    i = 0; stepSize = 1;
+
 
     OSA_printf("SIG_2A_config: start\n");
-    /*
-    if (gSIG_Obj.sensorFps == 25) {
-        ALG_aewbSetSensor50_60Hz(1); // 25FPS
+
+    if(gFlicker == VIDEO_NTSC) {		// 60 Hz flicker
+        stepSize = 8333; 	// Exposure stepsize
+    } else if(gFlicker == VIDEO_PAL) {	// 50 Hz flicker
+        stepSize = 10000; 	// Exposure stepsize
     } else {
-        ALG_aewbSetSensor50_60Hz(0); // 30FPS
-    }
-    */
-    if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0) 	// AR0331 sensor
-    {
-        if(gFlicker == VIDEO_NTSC)			// 60 Hz flicker
-        {
-            if (gSIG_Obj.sensorFps == 20)
-            {
-                stepSize = 6000; 	// Exposure stepsize
-                //if (sensorExposureMax > 33333)
-                sensorExposureMax = 48000;
-            }
-            else if (gSIG_Obj.sensorFps == 25){
-                stepSize = 7500; 	// Exposure stepsize
-                sensorExposureMax = 40000;
-            } else if (gSIG_Obj.sensorFps == 30){
-                stepSize = 9000; 	// Exposure stepsize
-                sensorExposureMax = 33333;
-            }
-        } else if(gFlicker == VIDEO_PAL) { // 50 Hz flicker
-            if (gSIG_Obj.sensorFps == 20)
-            {
-                stepSize = 7200; 	// Exposure stepsize
-                //if (sensorExposureMax > 33333)
-                sensorExposureMax = 43200;
-            }
-            else if (gSIG_Obj.sensorFps == 25) {
-                stepSize = 9000; 	// Exposure stepsize
-                sensorExposureMax = 40000;
-            } else if (gSIG_Obj.sensorFps == 30) {
-                stepSize = 10800; 	// Exposure stepsize
-                sensorExposureMax = 33333;
-            }
-        } else {
-            stepSize = 1;
-        }
-    } else if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9M034_720P") == 0) // MT9M034 sensor
-    {
-        if(gFlicker == VIDEO_NTSC)			// 60 Hz flicker
-        {
-            if (gSIG_Obj.sensorFps == 25){
-                stepSize = 7084; 	// Exposure stepsize
-                sensorExposureMax = 40000;
-            } else if (gSIG_Obj.sensorFps == 30){
-                stepSize = 8500; 	// Exposure stepsize
-                sensorExposureMax = 33333;
-            }
-        } else if(gFlicker == VIDEO_PAL)	// 50 Hz flicker
-        {
-            if (gSIG_Obj.sensorFps == 25) {
-                stepSize = 8500; 	// Exposure stepsize
-                sensorExposureMax = 40000;
-            } else if (gSIG_Obj.sensorFps == 30) {
-                stepSize = 10200; 	// Exposure stepsize
-                sensorExposureMax = 33333;
-            }
-        } else
-        {
-            stepSize = 1;
-        }
-    } else if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9P031_5MP") == 0) // MT9M031 sensor
-    {
-        if(gFlicker == VIDEO_NTSC)	{		// 60 Hz flicker
-            stepSize = 8333; 	// Exposure stepsize
-            sensorExposureMax = 33333;
-        } else if(gFlicker == VIDEO_PAL) {	// 50 Hz flicker
-            stepSize = 10000; 	// Exposure stepsize
-            sensorExposureMax = 40000;
-        } else {
-            stepSize = 1;
-        }
-    } else if (strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0) // IMX136 sensor
-    {
-        if(gFlicker == VIDEO_NTSC) {		// 60 Hz flicker
-            stepSize = 8333; 	// Exposure stepsize
-            sensorExposureMax = 33333;
-        } else if(gFlicker == VIDEO_PAL) {	// 50 Hz flicker
-            stepSize = 10000; 	// Exposure stepsize
-            sensorExposureMax = 40000;
-        } else {
-            stepSize = 1;
-            sensorExposureMax = 1000000/defaultFPS;
-        }
-    } else
-    {
         stepSize = 1;
     }
-    /*
-    DP.numRanges ++;
-
-    DP.sensorGainRange[i].min = 1000;
-    DP.sensorGainRange[i].max = 1000;
-    DP.ipipeGainRange[i].min = 0;
-    DP.ipipeGainRange[i].max = 8191;
-    //DP.isifGainRange[i].min = 0;
-    //DP.isifGainRange[i].max = 4095;
-    DP.YRange.min = 0;
-    DP.YRange.max = 0;
-    */
-
-    //DP.Ythresh = 10;
-    //DP.ExpStep = stepSize;
-
-    //sensorGain = 1000;
-    //lowlight = DRV_imgsGetAEPriority();
+    sensorExposureMax = 1000000/defaultFPS;
 
     //Exposure setup
     hn->Exp.Step = stepSize;
-    hn->Exp.Old = sensorExposureMax-1;
-    hn->Exp.New = sensorExposureMax;
+    hn->Exp.Old = (sensorExposureMax/stepSize)*stepSize;
+    hn->Exp.New = hn->Exp.Old;
     hn->Exp.Max = sensorExposureMax;
     hn->Exp.Min = sensorExposureMax;
     hn->Exp.Range.max = sensorExposureMax;
@@ -481,17 +398,6 @@ int SIG_2A_config(IALG_Handle handle)
     hn->Offset.Th = 10; //10%
     hn->Offset.Diff = 0;
 
-    //ISIF offset setup
-    hn->Fill.Step = 10;
-    hn->Fill.Old = 10;
-    hn->Fill.New = 10;
-    hn->Fill.Max = 0;
-    hn->Fill.Min = 0;
-    hn->Fill.Range.min = 1;
-    hn->Fill.Range.max = 1024;
-    hn->Fill.Th = 10; //10%
-    hn->Fill.Diff = 0;
-
     hn->Grgb2rgb.Old = 256;
     hn->Grgb2rgb.New = 256;
     hn->Grgb2rgb.Range.min = 1;
@@ -509,33 +415,20 @@ int SIG_2A_config(IALG_Handle handle)
     hn->Y.Th = 10; //10%
     hn->Y.Diff = 0;
 
-    //Hmin setup
-    hn->Hmin.New = 0;
-    hn->Hmin.Old = 0;
-
-    //Hmax setup
-    hn->Hmax.New = 0;
-    hn->Hmax.Old = 0;
-
     hn->RGBgain[0] = 512;
     hn->RGBgain[1] = hn->RGBgain[0];
     hn->RGBgain[2] = hn->RGBgain[0];
 
-    hn->HhalfTh = 100;
-    hn->Hhalf = 0;
 
     hn->HmaxTh = 3500;
-    hn->RGB[0].MaxTh = hn->HmaxTh;
-    hn->RGB[1].MaxTh = hn->HmaxTh;
-    hn->RGB[2].MaxTh = hn->HmaxTh;
-    hn->HminTh = 0;
-    hn->SatTh = hn->w*hn->h/50;
+    hn->SatTh = hn->w*hn->h/100;
 
 
     //First value of dymanic parameters
     hn->gAePriorityMode = gAePriorityMode;
     hn->gIRCut = gIRCut;
     hn->gBWMode = gBWMode;
+    hn->gFlicker = 4;
     hn->IRcutClose = IRcutClose; //IR-cut 1-open, 0 - close
     hn->FPShigh = FPShigh; //FPS 1-high, 0 - low
     /*
