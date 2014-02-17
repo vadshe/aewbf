@@ -1346,11 +1346,9 @@ void SIG2AFunc(void *pAddr)
         if(gSIG_Obj.aewbType == ALG_AEWB_AE || gSIG_Obj.aewbType == ALG_AEWB_AEWB){
             IAEWBF_SIG.process((IAEWBF_Handle)gSIG_Obj.handle_aewbf, &gSIG_Obj.InArgs, &gSIG_Obj.OutArgs);
             SIG2A_applySettings();
-        } else {
-            gSIG_Obj.OutArgs.nextAe = gSIG_Obj.InArgs.curAe;
+        //} else {
+        //    gSIG_Obj.OutArgs.nextAe = gSIG_Obj.InArgs.curAe;
         }
-
-
     }
     aewbFrames++;
 }

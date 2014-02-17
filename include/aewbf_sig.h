@@ -45,13 +45,13 @@ typedef struct IAEWBF_SIG_Obj {
     XDAS_UInt32 w, h;               //The width and height of BoxCar image
     XDAS_UInt32 hsz;                //Size on BoxCar Histogram
     XDAS_UInt16 *box;               //Pointer to BoxCar image
-    XDAS_Int32 RGBgain[3];          //R and G and B ISIF gains for white balansing
     IAEWBF_Param Exp;               //Exposure parameters
     IAEWBF_Param Offset;            //Offset
-    IAEWBF_Param GISIF;             //ISIF gain
     IAEWBF_Param GIFIF;             //IFIF gain
     IAEWBF_Param Grgb2rgb;          //Grgb2rgb gain
-    IAEWBF_Param Y;
+    IAEWBF_Param Y;                 //The average Y
+    IAEWBF_Param Rgain;             //The ISIF gain for R color
+    IAEWBF_Param Bgain;             //The ISIF gain for B color
     XDAS_UInt32 HmaxTh;             //The max of histogram threshold
     XDAS_UInt32 SatTh;              //Saturation Threshold for histogram max and min
 

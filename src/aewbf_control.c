@@ -6,6 +6,14 @@
 #include "aewbf_sig.h"
 #include "iaewbf_sig.h"
 
+#define __DEBUG
+#ifdef __DEBUG
+#define AE_DEBUG_PRINTS
+#define dprintf printf
+#else
+#define dprintf
+#endif
+
 ALG_AewbObj gALG_aewbObj;
 ALG_AewbfObj gSIG_Obj;
 
@@ -16,6 +24,23 @@ extern int gAePriorityMode, gBWMode, gDayNight, gIRCut, defaultFPS, gFlicker;
 extern int IRcutClose, FPShigh;
 extern int gHDR;
 extern Uint32 gamma42[], gamma00520[], gamma_hdr011[], gamma_hdr01[], gamma01[], gamma005[], gamma003[];
+extern Int32 leave_frames;
+
+void smooth_change( IAEWBF_Param *par, int fr)
+{
+    //OSA_printf("frames = %d fr = %d hn->Exp.New = %d hn->Exp.Old = %d diff = %d\n", frames, fr, hn->Exp.New, hn->Exp.Old, (hn->Exp.New - hn->Exp.Old)/leave_frames);
+    if(!fr) {
+        par->Change = (par->New - par->Old)/leave_frames;
+        par->Old += par->Change;
+    } else if (fr == (leave_frames-1)){
+        par->Old = par->New;
+    } else {
+        par->Old += par->Change;
+    }
+    //OSA_printf("hn->Exp.New = %d hn->Exp.Old = %d hn->Exp.Change = %d leave_frames = %d\n",
+    //           hn->Exp.New, hn->Exp.Old, hn->Exp.Change, leave_frames);
+}
+
 
 int Get_BoxCar(IALG_Handle handle)
 {
@@ -143,8 +168,7 @@ void ALG_SIG_config(IALG_Handle handle)
 
 
     //Config isif white balance gain
-    //DRV_isifSetDgain(512, 512, 512, 512, 0);
-    DRV_isifSetDgain(hn->RGBgain[1], hn->RGBgain[0], hn->RGBgain[2], hn->RGBgain[1], 0);
+    DRV_isifSetDgain(512, hn->Rgain.New, hn->Bgain.New, 512, 0);
 
 
     //Config ipipe gains and offset
@@ -164,6 +188,10 @@ void SIG2A_applySettings(void)
     CSL_IpipeGammaConfig dataG;
     DRV_IpipeWb ipipeWb;
     CSL_IpipeRgb2RgbConfig rgb2rgb;
+    static int frames = 0;
+    int fr;
+
+    fr = frames%leave_frames;
 
     OSA_printf("SIG2A_apply: gFlicker = %d gAePriorityMode = %d gBWMode = %d gDayNight =%d gIRCut = %d hn->gIRCut = %d defaultFPS = %d IRcutClose = %d hn->IRcutClose = %d FPShigh = %d hn->FPShigh = %d\n",
                gFlicker, gAePriorityMode, gBWMode, gDayNight, gIRCut, hn->gIRCut, defaultFPS, IRcutClose, hn->IRcutClose, FPShigh, hn->FPShigh);
@@ -194,23 +222,23 @@ void SIG2A_applySettings(void)
             if (gAePriorityMode == ALG_FPS_LOW) {
                 DRV_imgsSetFramerate(defaultFPS>>1);
                 hn->Exp.Range.max = 1000000/(defaultFPS>>1);
-                hn->Exp.New  = hn->Exp.Range.max;
+                hn->Exp.New  = (hn->Exp.Range.max/hn->Exp.Step)*hn->Exp.Step;
             }
             else if (gAePriorityMode == ALG_FPS_5FPS){
                 DRV_imgsSetFramerate(5);
                 hn->Exp.Range.max = 200000;
-                hn->Exp.New  = hn->Exp.Range.max;
+                hn->Exp.New  = (hn->Exp.Range.max/hn->Exp.Step)*hn->Exp.Step;
             } else {
                 DRV_imgsSetFramerate(defaultFPS);
                 hn->Exp.Range.max = 1000000/defaultFPS;
-                hn->Exp.New  = hn->Exp.Range.max;
+                hn->Exp.New  = (hn->Exp.Range.max/hn->Exp.Step)*hn->Exp.Step;
             }
             //else if (gAePriorityMode == ALG_FPS_NONE)   DRV_imgsSetFramerate(defaultFPS);
         } else {
             //Go to high FPS
             DRV_imgsSetFramerate(defaultFPS);
             hn->Exp.Range.max = 1000000/defaultFPS;
-            hn->Exp.New  = hn->Exp.Range.max;
+            hn->Exp.New  = (hn->Exp.Range.max/hn->Exp.Step)*hn->Exp.Step;
         }
         hn->FPShigh = FPShigh;
         hn->gAePriorityMode = gAePriorityMode;
@@ -257,8 +285,8 @@ void SIG2A_applySettings(void)
 
     //DRV_imgsSetEshutter(33333, 0);
     if(hn->Exp.New != hn->Exp.Old) {
-        DRV_imgsSetEshutter(hn->Exp.New, 0);
-        hn->Exp.Old = hn->Exp.New;
+        smooth_change(&hn->Exp, fr);
+        DRV_imgsSetEshutter(hn->Exp.Old, 0);
     }
 
     //ISIF gain seting
@@ -274,13 +302,18 @@ void SIG2A_applySettings(void)
         //           hn->GISIF.New, hn->GISIF.Old, hn->RGBgain[0], hn->RGBgain[1], hn->RGBgain[2]);
     }*/
     //if(hn->GISIF.New != hn->GISIF.Old) {
-        DRV_isifSetDgain(hn->RGBgain[1] , hn->RGBgain[0], hn->RGBgain[2], hn->RGBgain[1], 0);
-        //hn->GISIF.Old = hn->GISIF.New;
-    //}
+    if(hn->Rgain.New != hn->Rgain.Old || hn->Bgain.New != hn->Bgain.Old){
+        smooth_change(&hn->Rgain, fr);
+        smooth_change(&hn->Bgain, fr);
+        DRV_isifSetDgain(512 , hn->Rgain.New, hn->Bgain.New, 512, 0);
+        //hn->Rgain.Old = hn->Rgain.New;
+        //hn->Bgain.Old = hn->Bgain.New;
+    }
 
     if(hn->Offset.New != hn->Offset.Old) {
+        smooth_change(&hn->Offset, fr);
         DRV_ipipeSetWbOffset(-hn->Offset.New);
-        hn->Offset.Old = hn->Offset.New;
+        //hn->Offset.Old = hn->Offset.New;
     }
 
     //DRV_isifSetDgain(512, 512, 512, 512, 0);
@@ -291,13 +324,13 @@ void SIG2A_applySettings(void)
 
     //gain = (4000<<9)/(hn->Hmax[0] - hn->Hmin[0]);
     if(hn->GIFIF.New !=  hn->GIFIF.Old){
-        hn->GIFIF.Old = hn->GIFIF.New;
+        smooth_change(&hn->GIFIF, fr);
         ipipeWb.gainR  = hn->GIFIF.New;
         ipipeWb.gainGr = hn->GIFIF.New;
         ipipeWb.gainGb = hn->GIFIF.New;
         ipipeWb.gainB  = hn->GIFIF.New;
         DRV_ipipeSetWb(&ipipeWb);
-        hn->GIFIF.Old = hn->GIFIF.New;
+        //hn->GIFIF.Old = hn->GIFIF.New;
     }
 
     //offset = hn->Hmin[0] > 2047 ? 2047 : hn->Hmin[0];
@@ -305,8 +338,9 @@ void SIG2A_applySettings(void)
     //DRV_ipipeSetWbOffset(-offset);
 
 
-    //Config RGB2RGB matrix
+    //Config RGB2RGB matrix for more gain
     if(hn->Grgb2rgb.New !=  hn->Grgb2rgb.Old){
+        smooth_change(&hn->Grgb2rgb, fr);
         rgb2rgb.matrix[0][0] = hn->Grgb2rgb.New; //hn->RGBgain[0]*hn->Grgb2rgb.New>>8; //hn->RGBgain[0]; //hn->Grgb2rgb.New;
         rgb2rgb.matrix[0][1] = 0;
         rgb2rgb.matrix[0][2] = 0;
@@ -328,8 +362,9 @@ void SIG2A_applySettings(void)
         //if(DRV_ipipeSetRgb2Rgb2(&rgb2rgb) != CSL_SOK)
         //    OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
 
-        hn->Grgb2rgb.Old = hn->Grgb2rgb.New;
+        //hn->Grgb2rgb.Old = hn->Grgb2rgb.New;
     }
+    frames++;
 }
 
 
@@ -337,10 +372,6 @@ int SIG_2A_config(IALG_Handle handle)
 {
     IAEWBF_SIG_Obj *hn = (IAEWBF_SIG_Obj *)handle;
     int stepSize, sensorExposureMax;
-
-
-
-    OSA_printf("SIG_2A_config: start\n");
 
     if(gFlicker == VIDEO_NTSC) {		// 60 Hz flicker
         stepSize = 8333; 	// Exposure stepsize
@@ -365,16 +396,18 @@ int SIG_2A_config(IALG_Handle handle)
     printf("SIG_2A_config: hn->Exp.New = %d hn->Exp.Old = %d sensorExposureMax = %d gFlicker = %d\n",
            hn->Exp.New, hn->Exp.Old, sensorExposureMax, gFlicker);
 
-    //ISIF gain setup
-    hn->GISIF.Step = 16;
-    hn->GISIF.Old = 511;
-    hn->GISIF.New = 512;
-    hn->GISIF.Max = 512;
-    hn->GISIF.Min = 512;
-    hn->GISIF.Range.min = 100;
-    hn->GISIF.Range.max = 4095;
-    hn->GISIF.Th = 10; //10%
-    hn->GISIF.Diff = 0;
+
+    //ISIF R gain setup
+    hn->Rgain.Old = 511;
+    hn->Rgain.New = 512;
+    hn->Rgain.Range.min = 50;
+    hn->Rgain.Range.max = 4095;
+
+    //ISIF B gain setup
+    hn->Bgain.Old = 511;
+    hn->Bgain.New = 512;
+    hn->Bgain.Range.min = 50;
+    hn->Bgain.Range.max = 4095;
 
     //IFIF gain setup
     hn->GIFIF.Step = 16;
@@ -403,7 +436,6 @@ int SIG_2A_config(IALG_Handle handle)
     hn->Grgb2rgb.Range.min = 1;
     hn->Grgb2rgb.Range.max = 2047;
 
-
     //Y setup
     hn->Y.Step = 1;
     hn->Y.New = 1;
@@ -415,12 +447,7 @@ int SIG_2A_config(IALG_Handle handle)
     hn->Y.Th = 10; //10%
     hn->Y.Diff = 0;
 
-    hn->RGBgain[0] = 512;
-    hn->RGBgain[1] = hn->RGBgain[0];
-    hn->RGBgain[2] = hn->RGBgain[0];
-
-
-    hn->HmaxTh = 3500;
+    hn->HmaxTh = 3000;
     hn->SatTh = hn->w*hn->h/100;
 
 
