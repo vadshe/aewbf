@@ -18,9 +18,10 @@ extern int gIRCut, gFlicker;
 int IRcutClose = 1; //IR-cut 1-open, 0 - close
 int FPShigh = 1; //FPS 1-high, 0 - low
 extern int gHDR;
-
+extern int DEBUG;
 
 Int32 frames = 0, frame_count = 0, leave_frames = 5, down = 0;
+Int32 hmin, hmax;
 
 
 #define __DEBUG
@@ -122,12 +123,12 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
     Uint32 minr, minb, min, max;
     //Uint32 fp = 512, sp = 2304, fg = 1, sg = 7;
     Uint32 hist[hsz];
-    Uint32 upth = sz3/6, downth = sz3>>1, hmin, hmax, mid, uphalf;
+    Uint32 upth = sz3/6, downth = sz3>>1,  mid, uphalf;
     int GN[3];
 
     GN[0] = 16; GN[1] = 0; GN[2] = -16;
 
-    dprintf("frames = %d\n", frames);
+    //dprintf("frames = %d\n", frames);
     if(!(frames%leave_frames) && frames){
         //Clear histogram
         memset(hist, 0, sizeof(Uint32)*hsz);
@@ -169,16 +170,15 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         mid = (hmax - hmin)>>1;
         //Check upper half
         uphalf = sz3 - hist[mid];
-        dprintf("hist[0] = %u hist[hsz-1] = %u min = %d mid = %d max = %d uphalf = %d upth = %d\n",
-                hist[0], hist[hsz-1], hmin,  mid, hmax, uphalf, upth);
+        //dprintf("hist[0] = %u hist[hsz-1] = %u min = %d mid = %d max = %d uphalf = %d upth = %d\n",
+        //        hist[0], hist[hsz-1], hmin,  mid, hmax, uphalf, upth);
 
         while(uphalf < upth && hmax > 5){
             hmax--;
             mid = (hmax - hmin)>>1;
             uphalf = sz3 - hist[mid];
         }
-        dprintf("min = %d mid = %d max = %d \n", hmin,  mid, hmax);
-
+        //dprintf("min = %d mid = %d max = %d \n", hmin,  mid, hmax);
 
         hmax = hmax<<3;
         hmin = hmin<<3;
@@ -189,6 +189,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         if(hn->Y.Max) hn->Y.Diff = (hn->Y.Max - hn->Y.Min)*100/hn->Y.Max;
 
 #ifdef AE_DEBUG_PRINTS
+        /*
         dprintf("sz = %u cn = %d Y = %u min = %u max= %u SatTh = %u gHDR = %d \n",
                 sz, cn, Y, hmin,  hmax, hn->SatTh, gHDR);
         //dprintf("GB[0] = %u GB[1] = %u GB[2] = %u GB[3] = %u GB[4] = %u \n", GB[0], GB[1], GB[2], GB[3], GB[4]);
@@ -196,6 +197,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         dprintf("GB[0] = %u GB[1] = %u GB[2] = %u\n", GB[0], GB[1], GB[2]);
         dprintf("GN[0] = %d GN[1] = %d GN[2] = %d\n", GN[0], GN[1], GN[2]);
         dprintf("Rgain = %d Ggain = %d Bgain = %d\n", hn->Rgain.New, 512,  hn->Bgain.New);
+        */
 #endif
         //White balance algorithm
         min = GR[0]; minr = 0;
@@ -208,11 +210,11 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         }
         if(minr != 1){
             hn->Rgain.New = hn->Rgain.New + GN[minr];
-            dprintf("mini = %d GN[mini] = %d hn->Rgain.New = %d \n", minr, GN[minr], hn->Rgain.New);
+            //if(DEBUG) dprintf("WB R : RgN %d RgO %d\n", hn->Rgain.New, hn->Rgain.Old);
         }
         if(minb != 1){
             hn->Bgain.New = hn->Bgain.New + GN[minb];
-            dprintf("mini = %d GN[mini] = %d hn->Bgain.New = %d \n", minb, GN[minb], hn->Bgain.New);
+            //if(DEBUG) dprintf("WB B : BgN %d BgO %d\n", hn->Bgain.New, hn->Bgain.Old);
         }
         //Check range
         hn->Rgain.New = hn->Rgain.New > hn->Rgain.Range.max ? hn->Rgain.Range.max : hn->Rgain.New;
@@ -230,7 +232,6 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         //AE algorithm
         //Change expouse
         if(hmin > 60) { // || downth < uphalf){
-            dprintf("DOWN!!!!!!!!!!!!!!!!!\n");
             min = hn->Exp.Old*60/hmin;
             //min = min < hn->Exp.Old*downth/uphalf ? min : hn->Exp.Old*downth/uphalf;
             //Down expouse
@@ -243,8 +244,8 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             }
             if(hn->Exp.New < hn->Exp.Step) hn->Exp.New = hn->Exp.Step;
             down = 1;
+            //if(DEBUG) dprintf("EXP DOWN : ExpN %d ExpO %d\n", hn->Exp.New, hn->Exp.Old);
         } else if (hn->Y.Diff > hn->Y.Th){
-            dprintf("UP!!!!!!!!!!!!!!!!!\n");
             //Up expouse
             if(gFlicker == VIDEO_NONE){
                 hn->Exp.New = hn->Exp.Old*(100 + hn->Y.Th)/100;
@@ -253,6 +254,8 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                 hn->Exp.New += hn->Exp.Step;
                 if(hn->Exp.New > hn->Exp.Range.max)  hn->Exp.New -= hn->Exp.Step;
             }
+            //if(DEBUG) dprintf("EXP UP : ExpN %d ExpO %d YN %d YO %d YDiff %d\n", hn->Exp.New, hn->Exp.Old, hn->Y.New, hn->Y.Old, hn->Y.Diff);
+            //if(DEBUG) dprintf("EXP UP : YN %d YO %d YDiff %d\n", hn->Y.New, hn->Y.Old, hn->Y.Diff);
         }
         //Check Low light condition
         //First down fps
@@ -261,6 +264,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             if (frame_count > 100) {
                 FPShigh = 0;
                 frame_count = 0;
+                //if(DEBUG) dprintf("FPS DOWN : YN %d YO %d \n", hn->Y.New, hn->Y.Old);
             }
         }
         if ( FPShigh == 0 && IRcutClose == 1 && Y > 170) {
@@ -268,6 +272,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             if (frame_count > 100) {
                 FPShigh = 1;
                 frame_count = 0;
+                //if(DEBUG) dprintf("FPS UP : YN %d YO %d \n", hn->Y.New, hn->Y.Old);
             }
         }
         //Second open IR-cut
@@ -278,6 +283,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                 if (frame_count > 100) {
                     IRcutClose = 0;
                     frame_count = 0;
+                    //if(DEBUG) dprintf("IR OPEN : YN %d YO %d \n", hn->Y.New, hn->Y.Old);
                 }
             }
             //Come back to day mode
@@ -286,6 +292,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                 if (frame_count > 100) {
                     IRcutClose = 1;
                     frame_count = 0;
+                    //if(DEBUG) dprintf("IR CLOSE : YN %d YO %d \n", hn->Y.New, hn->Y.Old);
                 }
             }
         }
@@ -295,6 +302,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         //IFIF gain
         if(hmax) hn->GIFIF.New = ((hn->HmaxTh)<<9)/(hmax - hn->Offset.New);
         //If not enough IFIF gain add rgb2rgb gain
+
         if(hn->GIFIF.New > hn->GIFIF.Range.max){
             hn->Grgb2rgb.New = (hn->GIFIF.New*256/hn->GIFIF.Range.max);
         } else {
@@ -308,10 +316,12 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         hn->Grgb2rgb.New = hn->Grgb2rgb.New < hn->Grgb2rgb.Range.min ? hn->Grgb2rgb.Range.min : hn->Grgb2rgb.New;
 
 #ifdef AE_DEBUG_PRINTS
+        /*
         dprintf("Y.Min = %d Y.Max = %d Y.Diff = %d Y.Th = %d\n", hn->Y.Min, hn->Y.Max, hn->Y.Diff, hn->Y.Th);
         dprintf("gain = %d grgb2rgb = %d offset = %d \n", hn->GIFIF.New, hn->Grgb2rgb.New, hn->Offset.New);
         dprintf("Exp.Old = %d Exp.New = %d Offset.Old = %d Offset.New = %d\n",
                 hn->Exp.Old, hn->Exp.New, hn->Offset.Old, hn->Offset.New);
+         */
 #endif
 
         hn->Y.Old = hn->Y.New;

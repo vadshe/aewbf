@@ -52,8 +52,12 @@ typedef struct IAEWBF_SIG_Obj {
     IAEWBF_Param Y;                 //The average Y
     IAEWBF_Param Rgain;             //The ISIF gain for R color
     IAEWBF_Param Bgain;             //The ISIF gain for B color
+    IAEWBF_Param Hmin;              //The minimum of histogram
+    IAEWBF_Param Hmax;              //The maximum of histogram
     XDAS_UInt32 HmaxTh;             //The max of histogram threshold
     XDAS_UInt32 SatTh;              //Saturation Threshold for histogram max and min
+    XDAS_UInt32 FPSmax;             //Maximum FPS
+    XDAS_UInt32 FPScur;             //Current FPS
 
     //Dynamic parametar
     int gAePriorityMode, gBWMode, gDayNight, gIRCut, defaultFPS, gFlicker;
