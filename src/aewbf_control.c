@@ -25,7 +25,7 @@ extern int IRcutClose, FPShigh;
 extern int gHDR;
 extern Uint32 gamma42[], gamma00520[], gamma_hdr011[], gamma_hdr01[], gamma01[], gamma005[], gamma003[];
 extern Int32 leave_frames;
-extern Int32 hmin, hmax;
+
 int DEBUG = 1;
 
 
@@ -224,8 +224,8 @@ void print_debug(int frames, int leave_frames, IAEWBF_SIG_Obj *hn){
             i++;
         }
 
-        if(i) dprintf("Y.New = %4d Y.Old = %4d Y.Min = %4d Y.Max = %4d Y.Diff = %4d hmin = %4d hmax = %4d\n",
-                                   hn->Y.New, hn->Y.Old, hn->Y.Min, hn->Y.Max, hn->Y.Diff, hmin, hmax);
+        if(i) dprintf("Y.New = %4d Y.Old = %4d Y.Min = %4d Y.Max = %4d Y.Diff = %4d Hmin = %4d Hmax = %4d\n",
+                                   hn->Y.New, hn->Y.Old, hn->Y.Min, hn->Y.Max, hn->Y.Diff, hn->Hmin.New, hn->Hmax.New);
 
     }
 }
@@ -241,14 +241,6 @@ void SIG2A_applySettings(void)
 
     print_debug(frames, leave_frames, hn);
 
-    //FPS dinamyc changed
-    if(defaultFPS != hn->FPScur) {
-        hn->FPScur = defaultFPS;
-        hn->FPSmax = defaultFPS;
-        hn->Exp.Range.max = 1000000/hn->FPScur;
-        hn->Exp.New = hn->Exp.Range.max;
-        printf("defaultFPS = %d\n", defaultFPS);
-    }
 
     //IR-cut dynamic change
     if(gIRCut != hn->gIRCut) {
@@ -267,7 +259,11 @@ void SIG2A_applySettings(void)
     }
 
     //Change FPS
-    if (FPShigh != hn->FPShigh || gAePriorityMode != hn->gAePriorityMode) {
+    if (FPShigh != hn->FPShigh || gAePriorityMode != hn->gAePriorityMode || defaultFPS != hn->FPScur) {
+        if(defaultFPS != hn->FPScur){
+            hn->FPScur = defaultFPS;
+            hn->FPSmax = defaultFPS;
+        }
         if(FPShigh == 0 ){
             //Go to low FPS
             if (gAePriorityMode == ALG_FPS_LOW) {
@@ -296,6 +292,7 @@ void SIG2A_applySettings(void)
         }
         hn->FPShigh = FPShigh;
         hn->gAePriorityMode = gAePriorityMode;
+        printf("defaultFPS = %d\n", defaultFPS);
     }
 
     //Change IR-cut
@@ -421,7 +418,7 @@ void SIG2A_applySettings(void)
 int SIG_2A_config(IALG_Handle handle)
 {
     IAEWBF_SIG_Obj *hn = (IAEWBF_SIG_Obj *)handle;
-    int stepSize, sensorExposureMax;
+    int i, stepSize, sensorExposureMax;
 
     if(gFlicker == VIDEO_NTSC) {		// 60 Hz flicker
         stepSize = 8333; 	// Exposure stepsize
@@ -501,6 +498,13 @@ int SIG_2A_config(IALG_Handle handle)
     hn->HmaxTh = 3000;
     hn->SatTh = hn->w*hn->h/100;
 
+    hn->Hmax.HistC = 0;
+    hn->Hmin.HistC = 0;
+    for(i=0; i < HISTORY; i++) hn->Hmax.Hist[i] = 0;
+    hn->Hmax.Avrg = 0;
+
+    for(i=0; i < HISTORY; i++) hn->Hmin.Hist[i] = 0;
+    hn->Hmin.Avrg = 0;
 
     //First value of dymanic parameters
     hn->gAePriorityMode = gAePriorityMode;

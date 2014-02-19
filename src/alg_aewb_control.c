@@ -904,8 +904,8 @@ short ALG_aewbSetSensorFrameRate(int frame_rate_mode)
   static int prevValue=-1;
   int maxframerate;
 
-  if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9P031_5MP") != 0)
-      return 0;
+//  if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9P031_5MP") != 0)
+//      return 0;
 
   frame_rate_mode = OSA_max(frame_rate_mode, 5);
 

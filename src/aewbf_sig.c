@@ -21,8 +21,6 @@ extern int gHDR;
 extern int DEBUG;
 
 Int32 frames = 0, frame_count = 0, leave_frames = 5, down = 0;
-Int32 hmin, hmax;
-
 
 #define __DEBUG
 #ifdef __DEBUG
@@ -161,27 +159,43 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
 
         //Find max in color histogram
         for(i=0;  hist[i] < hn->SatTh; i++) ;
-        hmin = i; 
+        hn->Hmin.New = i;
 
         for(i=hsz-1; (sz3 - hist[i]) < hn->SatTh; i--);
-        hmax = i; 
-
+        hn->Hmax.New = i;
+        /*
         //The middle of histogram
-        mid = (hmax - hmin)>>1;
+        mid = (hn->Hmax.New - hn->Hmin.New)>>1;
         //Check upper half
         uphalf = sz3 - hist[mid];
         //dprintf("hist[0] = %u hist[hsz-1] = %u min = %d mid = %d max = %d uphalf = %d upth = %d\n",
-        //        hist[0], hist[hsz-1], hmin,  mid, hmax, uphalf, upth);
+        //        hist[0], hist[hsz-1], hn->Hmin.New,  mid, hn->Hmax.New, uphalf, upth);
 
-        while(uphalf < upth && hmax > 5){
-            hmax--;
-            mid = (hmax - hmin)>>1;
+        while(uphalf < upth && hn->Hmax.New > 5){
+            hn->Hmax.New--;
+            mid = (hn->Hmax.New - hn->Hmin.New)>>1;
             uphalf = sz3 - hist[mid];
         }
-        //dprintf("min = %d mid = %d max = %d \n", hmin,  mid, hmax);
+        //dprintf("min = %d mid = %d max = %d \n", hn->Hmin.New,  mid, hn->Hmax.New);
+        */
 
-        hmax = hmax<<3;
-        hmin = hmin<<3;
+        //Avaraging
+        hn->Hmax.Avrg += hn->Hmax.New;
+        hn->Hmax.Avrg -= hn->Hmax.Hist[hn->Hmax.HistC];
+        hn->Hmax.Hist[hn->Hmax.HistC] = hn->Hmax.New;
+        hn->Hmax.HistC = hn->Hmax.HistC == HISTORY - 1 ? 0 : hn->Hmax.HistC + 1;
+
+        hn->Hmin.Avrg += hn->Hmin.New;
+        hn->Hmin.Avrg -= hn->Hmin.Hist[hn->Hmin.HistC];
+        hn->Hmin.Hist[hn->Hmin.HistC] = hn->Hmin.New;
+        hn->Hmin.HistC = (hn->Hmin.HistC == (HISTORY - 1)) ? 0 : hn->Hmin.HistC + 1;
+
+
+        hn->Hmax.Avrg = (hn->Hmax.Avrg<<3)/HISTORY;
+        hn->Hmin.Avrg = (hn->Hmin.Avrg<<3)/HISTORY;
+
+        hn->Hmax.New = hn->Hmax.New<<3;
+        hn->Hmin.New = hn->Hmin.New<<3;
 
         //Check Y history of difference
         if(Y > hn->Y.Max) hn->Y.Max = Y;
@@ -191,7 +205,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
 #ifdef AE_DEBUG_PRINTS
         /*
         dprintf("sz = %u cn = %d Y = %u min = %u max= %u SatTh = %u gHDR = %d \n",
-                sz, cn, Y, hmin,  hmax, hn->SatTh, gHDR);
+                sz, cn, Y, hn->Hmin.New,  hn->Hmax.New, hn->SatTh, gHDR);
         //dprintf("GB[0] = %u GB[1] = %u GB[2] = %u GB[3] = %u GB[4] = %u \n", GB[0], GB[1], GB[2], GB[3], GB[4]);
         dprintf("GR[0] = %u GR[1] = %u GR[2] = %u\n", GR[0], GR[1], GR[2]);
         dprintf("GB[0] = %u GB[1] = %u GB[2] = %u\n", GB[0], GB[1], GB[2]);
@@ -231,13 +245,13 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
 
         //AE algorithm
         //Change expouse
-        if(hmin > 60) { // || downth < uphalf){
-            min = hn->Exp.Old*60/hmin;
+        if(hn->Hmin.New > 60) { // || downth < uphalf){
+            min = hn->Exp.Old*60/hn->Hmin.New;
             //min = min < hn->Exp.Old*downth/uphalf ? min : hn->Exp.Old*downth/uphalf;
             //Down expouse
             if(gFlicker == VIDEO_NONE){
                 hn->Exp.New = min;
-                //hn->Exp.New = hn->Exp.Old*100/hmin;
+                //hn->Exp.New = hn->Exp.Old*100/hn->Hmin.New;
                 //hn->Exp.New = hn->Exp.Old*downth/uphalf;
             } else {
                 hn->Exp.New -= hn->Exp.Step;
@@ -298,9 +312,10 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         }
 
         //Change the offset
-        hn->Offset.New = hmin;
+        //hn->Offset.New = hn->Hmin.New;
+        hn->Offset.New = hn->Hmin.Avrg;
         //IFIF gain
-        if(hmax) hn->GIFIF.New = ((hn->HmaxTh)<<9)/(hmax - hn->Offset.New);
+        if(hn->Hmax.Avrg) hn->GIFIF.New = ((hn->HmaxTh)<<9)/(hn->Hmax.Avrg - hn->Offset.New);
         //If not enough IFIF gain add rgb2rgb gain
 
         if(hn->GIFIF.New > hn->GIFIF.Range.max){

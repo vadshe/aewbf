@@ -11,6 +11,7 @@
 #define GY    0x96
 #define BY    0x1d
 #define ALG_SENSOR_BITS (1<<9)
+#define HISTORY 8
 
 typedef struct ALG_AewbfObj {
     IAEWBF_InArgs   InArgs;
@@ -38,6 +39,24 @@ typedef struct ALG_AewbfObj {
     int afEnable;
 
 } ALG_AewbfObj;
+
+typedef struct IAEWBF_Param{
+    XDAS_Int32 Old;
+    XDAS_Int32 New;
+    XDAS_Int32 Step;
+    XDAS_Int32 Min;
+    XDAS_Int32 Max;
+    XDAS_Int32 Sat;
+    XDAS_Int32 Diff;
+    XDAS_Int32 Th;
+    XDAS_Int32 Avrg;
+    XDAS_Int32 Avrs;
+    XDAS_Int32 Change;
+    XDAS_Int32 Hist[HISTORY];
+    XDAS_Int32 HistC;
+    IAEWBF_Range Range;
+}IAEWBF_Param;
+
 
 typedef struct IAEWBF_SIG_Obj {
     IALG_Obj   alg;            /* MUST be first field of all XDAS algs */
