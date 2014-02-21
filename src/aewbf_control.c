@@ -146,7 +146,7 @@ void ALG_SIG_config(IALG_Handle handle)
     rgb2rgb2.matrix[2][1] = 0;
     rgb2rgb2.matrix[2][2] = 256;
 
-    if(!gHDR && strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0){
+    if(strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0){
         rgb2rgb2.matrix[0][0] = 360;
         rgb2rgb2.matrix[0][1] = -153;
         rgb2rgb2.matrix[0][2] = 49;
@@ -224,8 +224,8 @@ void print_debug(int frames, int leave_frames, IAEWBF_SIG_Obj *hn){
             i++;
         }
 
-        if(i) dprintf("Y.New = %4d Y.Old = %4d Y.Min = %4d Y.Max = %4d Y.Diff = %4d Hmin = %4d Hmax = %4d\n",
-                                   hn->Y.New, hn->Y.Old, hn->Y.Min, hn->Y.Max, hn->Y.Diff, hn->Hmin.New, hn->Hmax.New);
+        if(i) dprintf("Y.New = %4d Y.Old = %4d Y.Min = %4d Y.Max = %4d Y.Diff = %4d Hmin = %4d Hmax = %4d HminA = %4d HmaxA = %4d\n",
+                                   hn->Y.New, hn->Y.Old, hn->Y.Min, hn->Y.Max, hn->Y.Diff, hn->Hmin.New, hn->Hmax.New, hn->Hmin.NewA, hn->Hmax.NewA);
 
     }
 }
@@ -495,7 +495,7 @@ int SIG_2A_config(IALG_Handle handle)
     hn->Y.Th = 10; //10%
     hn->Y.Diff = 0;
 
-    hn->HmaxTh = 3000;
+    hn->HmaxTh = 3300;
     hn->SatTh = hn->w*hn->h/100;
 
     hn->Hmax.HistC = 0;

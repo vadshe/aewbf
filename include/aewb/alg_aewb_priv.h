@@ -76,5 +76,6 @@ short ALG_aewbAFEnable  (int af_enable);
 
 short ALG_aewbSetAEPriorityMode (int ae_priority_mode);
 
+
 #endif /* _ALG_AEWB_PRIV_H_ */
 

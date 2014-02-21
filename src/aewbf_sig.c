@@ -9,6 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <aewb_xdm.h>
+//#include <osa.h>
+//#include <drv_motor.h>
 #include "iaewbf_sig.h"
 #include "aewbf_sig.h"
 #include "alg_aewb.h"
@@ -19,8 +21,15 @@ int IRcutClose = 1; //IR-cut 1-open, 0 - close
 int FPShigh = 1; //FPS 1-high, 0 - low
 extern int gHDR;
 extern int DEBUG;
+extern ALG_AewbfObj gSIG_Obj;
+#define HISTTH 60
 
-Int32 frames = 0, frame_count = 0, leave_frames = 5, down = 0;
+extern int DRV_imgsMotorStep(int type, int direction, int steps);
+extern int OSA_fileReadFile(const char *fileName, void *addr, size_t readSize, size_t *actualReadSize);
+extern int OSA_fileWriteFile(const char *fileName, const void *addr, size_t size);
+extern void OSA_waitMsecs(Uint32 msecs);
+
+Int32  frame_count = 0, leave_frames = 5, down = 0;
 
 #define __DEBUG
 #ifdef __DEBUG
@@ -122,6 +131,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
     //Uint32 fp = 512, sp = 2304, fg = 1, sg = 7;
     Uint32 hist[hsz];
     Uint32 upth = sz3/6, downth = sz3>>1,  mid, uphalf;
+    static int frames = 0;
     int GN[3];
 
     GN[0] = 16; GN[1] = 0; GN[2] = -16;
@@ -133,7 +143,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         for(j=0; j < ns; j++) { GR[j] = 0; GB[j] = 0; }
 
         for(i=0; i < sz4; i+=4) {
-            //i1 = i+1; i2 = i+2;
+            //AE and WB
             r = box[i+2]>>2;
             g = box[i+1]>>2;
             b = box[i  ]>>2;
@@ -163,21 +173,23 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
 
         for(i=hsz-1; (sz3 - hist[i]) < hn->SatTh; i--);
         hn->Hmax.New = i;
-        /*
-        //The middle of histogram
-        mid = (hn->Hmax.New - hn->Hmin.New)>>1;
-        //Check upper half
-        uphalf = sz3 - hist[mid];
-        //dprintf("hist[0] = %u hist[hsz-1] = %u min = %d mid = %d max = %d uphalf = %d upth = %d\n",
-        //        hist[0], hist[hsz-1], hn->Hmin.New,  mid, hn->Hmax.New, uphalf, upth);
 
-        while(uphalf < upth && hn->Hmax.New > 5){
-            hn->Hmax.New--;
+        //Add more gain in night mode
+        if(FPShigh == 0 && IRcutClose == 0){
+            //The middle of histogram
             mid = (hn->Hmax.New - hn->Hmin.New)>>1;
+            //Check upper half
             uphalf = sz3 - hist[mid];
+            //dprintf("hist[0] = %u hist[hsz-1] = %u min = %d mid = %d max = %d uphalf = %d upth = %d\n",
+            //        hist[0], hist[hsz-1], hn->Hmin.New,  mid, hn->Hmax.New, uphalf, upth);
+
+            while(uphalf < upth && hn->Hmax.New > 5){
+                hn->Hmax.New--;
+                mid = (hn->Hmax.New - hn->Hmin.New)>>1;
+                uphalf = sz3 - hist[mid];
+            }
+            //dprintf("min = %d mid = %d max = %d \n", hn->Hmin.New,  mid, hn->Hmax.New);
         }
-        //dprintf("min = %d mid = %d max = %d \n", hn->Hmin.New,  mid, hn->Hmax.New);
-        */
 
         //Avaraging
         hn->Hmax.Avrg += hn->Hmax.New;
@@ -191,8 +203,8 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         hn->Hmin.HistC = (hn->Hmin.HistC == (HISTORY - 1)) ? 0 : hn->Hmin.HistC + 1;
 
 
-        hn->Hmax.Avrg = (hn->Hmax.Avrg<<3)/HISTORY;
-        hn->Hmin.Avrg = (hn->Hmin.Avrg<<3)/HISTORY;
+        hn->Hmax.NewA = (hn->Hmax.Avrg<<3)/HISTORY;
+        hn->Hmin.NewA = (hn->Hmin.Avrg<<3)/HISTORY;
 
         hn->Hmax.New = hn->Hmax.New<<3;
         hn->Hmin.New = hn->Hmin.New<<3;
@@ -245,31 +257,34 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
 
         //AE algorithm
         //Change expouse
-        if(hn->Hmin.New > 60) { // || downth < uphalf){
-            min = hn->Exp.Old*60/hn->Hmin.New;
-            //min = min < hn->Exp.Old*downth/uphalf ? min : hn->Exp.Old*downth/uphalf;
-            //Down expouse
-            if(gFlicker == VIDEO_NONE){
-                hn->Exp.New = min;
-                //hn->Exp.New = hn->Exp.Old*100/hn->Hmin.New;
-                //hn->Exp.New = hn->Exp.Old*downth/uphalf;
-            } else {
-                hn->Exp.New -= hn->Exp.Step;
+        if(FPShigh == 1 && IRcutClose == 1){
+            if(hn->Hmin.New > HISTTH) { // || downth < uphalf){
+                if(hn->Hmin.New > HISTTH*3) min = hn->Exp.Old>>1;
+                else min = hn->Exp.Old*HISTTH/hn->Hmin.New;
+                //min = min < hn->Exp.Old*downth/uphalf ? min : hn->Exp.Old*downth/uphalf;
+                //Down expouse
+                if(gFlicker == VIDEO_NONE){
+                    hn->Exp.New = min;
+                    //hn->Exp.New = hn->Exp.Old*100/hn->Hmin.New;
+                    //hn->Exp.New = hn->Exp.Old*downth/uphalf;
+                } else {
+                    hn->Exp.New -= hn->Exp.Step;
+                }
+                if(hn->Exp.New < hn->Exp.Step) hn->Exp.New = hn->Exp.Step;
+                down = 1;
+                //if(DEBUG) dprintf("EXP DOWN : ExpN %d ExpO %d\n", hn->Exp.New, hn->Exp.Old);
+            } else if (hn->Y.Diff > hn->Y.Th){
+                //Up expouse
+                if(gFlicker == VIDEO_NONE){
+                    hn->Exp.New = hn->Exp.Old*(100 + hn->Y.Th)/100;
+                    if(hn->Exp.New > hn->Exp.Range.max)  hn->Exp.New = hn->Exp.Range.max;
+                } else  {
+                    hn->Exp.New += hn->Exp.Step;
+                    if(hn->Exp.New > hn->Exp.Range.max)  hn->Exp.New -= hn->Exp.Step;
+                }
+                //if(DEBUG) dprintf("EXP UP : ExpN %d ExpO %d YN %d YO %d YDiff %d\n", hn->Exp.New, hn->Exp.Old, hn->Y.New, hn->Y.Old, hn->Y.Diff);
+                //if(DEBUG) dprintf("EXP UP : YN %d YO %d YDiff %d\n", hn->Y.New, hn->Y.Old, hn->Y.Diff);
             }
-            if(hn->Exp.New < hn->Exp.Step) hn->Exp.New = hn->Exp.Step;
-            down = 1;
-            //if(DEBUG) dprintf("EXP DOWN : ExpN %d ExpO %d\n", hn->Exp.New, hn->Exp.Old);
-        } else if (hn->Y.Diff > hn->Y.Th){
-            //Up expouse
-            if(gFlicker == VIDEO_NONE){
-                hn->Exp.New = hn->Exp.Old*(100 + hn->Y.Th)/100;
-                if(hn->Exp.New > hn->Exp.Range.max)  hn->Exp.New = hn->Exp.Range.max;
-            } else  {
-                hn->Exp.New += hn->Exp.Step;
-                if(hn->Exp.New > hn->Exp.Range.max)  hn->Exp.New -= hn->Exp.Step;
-            }
-            //if(DEBUG) dprintf("EXP UP : ExpN %d ExpO %d YN %d YO %d YDiff %d\n", hn->Exp.New, hn->Exp.Old, hn->Y.New, hn->Y.Old, hn->Y.Diff);
-            //if(DEBUG) dprintf("EXP UP : YN %d YO %d YDiff %d\n", hn->Y.New, hn->Y.Old, hn->Y.Diff);
         }
         //Check Low light condition
         //First down fps
@@ -313,9 +328,9 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
 
         //Change the offset
         //hn->Offset.New = hn->Hmin.New;
-        hn->Offset.New = hn->Hmin.Avrg;
+        hn->Offset.New = hn->Hmin.NewA;
         //IFIF gain
-        if(hn->Hmax.Avrg) hn->GIFIF.New = ((hn->HmaxTh)<<9)/(hn->Hmax.Avrg - hn->Offset.New);
+        if(hn->Hmax.NewA) hn->GIFIF.New = ((hn->HmaxTh)<<9)/(hn->Hmax.NewA - hn->Offset.New);
         //If not enough IFIF gain add rgb2rgb gain
 
         if(hn->GIFIF.New > hn->GIFIF.Range.max){
@@ -355,3 +370,142 @@ XDAS_Int32 IAEWBF_SIG_control(IAEWBF_Handle handle, IAEWBF_Cmd id,
     return IAES_EOK;
 }
 
+enum choise {autofocus, zoomchange, af_end};
+
+void AF_SIG_process(int *afEnable)
+{
+    IAEWBF_SIG_Obj *hn = (IAEWBF_SIG_Obj *)(IAEWBF_Handle)gSIG_Obj.handle_aewbf;
+
+    Int32 w = hn->w, h = hn->h;
+    Int32 sz = w*h,  sz4 = sz*4;
+    Int32 i, focus_val = 0;
+    Uint16 *box = hn->box;
+    int status;
+    char zoomvalue[4];
+    int readsize, zoom, shift = 4;
+    static int frames = 0, numframes = 0;
+    static int zoomstep = 0;
+
+    static Bool zoomdir = 0;
+    static Bool focusdir = 1;
+    static Bool dir = 0;
+
+    static int maxstep, maxN, maxO;
+    static int step = autofocus;
+
+    static int firststep = 0;
+    static int stepcnt = 0;
+    static int AFMax = 0;
+
+
+    for(i=5; i < sz4; i+=4) {
+        focus_val += abs(box[i] - box[i-4]);
+    }
+    //focus_val = (focus_val>>2)/sz;
+    //if(numframes)
+
+    if (!numframes) {
+        status = OSA_fileReadFile("/var/run/zoom", zoomvalue, sizeof(zoomvalue), (size_t*)&readsize);
+
+        if(status!=OSA_SOK) {
+            //OSA_printf("AF: error read from file\n");
+            status = 0;
+            zoom = 0;
+        } else {
+            zoom = atoi(zoomvalue);
+        }
+
+        if (zoom > 0 && zoom < 2000) {
+            if (zoom > 1000) {
+                zoomdir = TRUE;
+                zoomstep = zoom - 1000;
+            } else {
+                zoomdir = FALSE;
+                zoomstep = zoom;
+            }
+            dir = zoomdir;
+            if (zoomstep >= 3) {
+                step = zoomchange;
+                AFMax = 0;
+                maxO = 0;
+                if (zoomstep > 10) zoomstep += 10;
+                else zoomstep *= 2;
+
+                sprintf(zoomvalue, "%04d", 0);
+                status = OSA_fileWriteFile("/var/run/zoom", zoomvalue, sizeof(zoomvalue));
+                if(status!=OSA_SOK) {
+                    OSA_printf("AF: error write in file\n");
+                }
+            }
+        }
+        //numframes = 0;
+        if(step != zoomchange) step = autofocus;
+    }
+    numframes++;
+    //step = coarse;
+
+    switch(step) {
+    case zoomchange:
+        stepcnt ++;
+        DRV_imgsMotorStep(1, dir, 1); // 2 is optimal step for AF
+        if(stepcnt > shift){
+
+            //maxO = 0;
+            if(focus_val > AFMax){
+                maxN = focus_val;
+                if(maxN < maxO){
+                    DRV_imgsMotorStep(1, !dir, 8);
+                    step = af_end;
+                    stepcnt = 0;
+                }
+                OSA_printf("zoomchange stepcnt = %d focus_val = %d maxN = %d maxO = %d focusdir = %d step = %d\n",
+                           stepcnt, focus_val, maxN, maxO, focusdir, step);
+                maxO = maxN;
+            }
+        }
+        if ((stepcnt - shift) > 200) {
+            step = af_end;
+            stepcnt = 0;
+        }
+         break;
+    case autofocus:
+        if (firststep < 20) {// set start position and stabilize video
+            if (firststep == 0) {// set start position
+                focusdir = 0;
+                DRV_imgsMotorStep(1, focusdir, 250);
+                //if(!focusdir) {
+                //    DRV_imgsMotorStep(1, 1, maxstep-4);
+                //}
+            }
+            stepcnt = 0;
+            firststep++;
+            AFMax = focus_val;
+        } else {
+            stepcnt +=2;
+            DRV_imgsMotorStep(1, !focusdir, 2); // 2 is optimal step for AF
+
+            if(stepcnt > shift){
+
+                if(focus_val > AFMax) {  AFMax = focus_val; maxstep = stepcnt; }
+                if ((stepcnt - shift) > 200) {
+                    stepcnt = 0;
+                    AFMax = AFMax*80/100;
+                    maxO = 0;
+                    dir = focusdir;
+                    step = zoomchange;
+                }
+                OSA_printf("autofocus stepcnt = %d focus_val = %d AFMax = %d maxstep = %d focusdir = %d step = %d\n",
+                           stepcnt, focus_val, AFMax, maxstep, focusdir, step);
+            }
+        }
+        break;
+    case af_end:
+        *afEnable = 0;
+        stepcnt = 0;
+        numframes = 0;
+        DRV_imgsMotorStep(1, 0, 0); // turn off gpio
+        break;
+     }
+
+    frames++;
+}

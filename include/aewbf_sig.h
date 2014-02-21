@@ -54,6 +54,7 @@ typedef struct IAEWBF_Param{
     XDAS_Int32 Change;
     XDAS_Int32 Hist[HISTORY];
     XDAS_Int32 HistC;
+    XDAS_Int32 NewA;
     IAEWBF_Range Range;
 }IAEWBF_Param;
 
@@ -93,6 +94,7 @@ extern Int IAEWBF_SIG_init(IALG_Handle handle, const IALG_MemRec memTab[], IALG_
 extern XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWBF_OutArgs *outArgs);
 
 extern XDAS_Int32 IAEWBF_SIG_control(IAEWBF_Handle handle, IAEWBF_Cmd id, IAEWBF_DynamicParams *params, IAEWBF_Status *status);
+
 
 int Get_BoxCar(IALG_Handle handle);
 void ALG_SIG_config(IALG_Handle handle);
