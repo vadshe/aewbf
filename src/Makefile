@@ -92,7 +92,7 @@ CONFIG_CLEAN_VPATH_FILES =
 LTLIBRARIES = $(noinst_LTLIBRARIES)
 libaewbf_la_LIBADD =
 am_libaewbf_la_OBJECTS = alg_aewb_control.lo aewbf_sig.lo alg_aewb.lo \
-	gamma.lo aewbf_control.lo
+	gamma.lo aewbf_control.lo alg_motionDetect.lo
 libaewbf_la_OBJECTS = $(am_libaewbf_la_OBJECTS)
 AM_V_lt = $(am__v_lt_$(V))
 am__v_lt_ = $(am__v_lt_$(AM_DEFAULT_VERBOSITY))
@@ -276,7 +276,7 @@ top_srcdir = ..
 AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/include/aewb
 noinst_LTLIBRARIES = libaewbf.la
 libaewbf_la_SOURCES = alg_aewb_control.c aewbf_sig.c alg_aewb.c \
-	gamma.c aewbf_control.c
+	gamma.c aewbf_control.c alg_motionDetect.c
 all: all-am
 
 .SUFFIXES:
@@ -336,6 +336,7 @@ include ./$(DEPDIR)/aewbf_control.Plo
 include ./$(DEPDIR)/aewbf_sig.Plo
 include ./$(DEPDIR)/alg_aewb.Plo
 include ./$(DEPDIR)/alg_aewb_control.Plo
+include ./$(DEPDIR)/alg_motionDetect.Plo
 include ./$(DEPDIR)/gamma.Plo
 
 .c.o:
