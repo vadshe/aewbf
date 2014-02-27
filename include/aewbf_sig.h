@@ -78,7 +78,7 @@ typedef struct IAEWBF_SIG_Obj {
     XDAS_UInt32 SatTh;              //Saturation Threshold for histogram max and min
     XDAS_UInt32 FPSmax;             //Maximum FPS
     XDAS_UInt32 FPScur;             //Current FPS
-
+    XDAS_UInt32 RGB[3][512];        //Gamma tables for each color
     //Dynamic parametar
     int gAePriorityMode, gBWMode, gDayNight, gIRCut, defaultFPS, gFlicker;
     int IRcutClose; //IR-cut 1-close, 0 - open

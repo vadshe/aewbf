@@ -145,7 +145,7 @@ void ALG_SIG_config(IALG_Handle handle)
     rgb2rgb2.matrix[2][0] = 0;
     rgb2rgb2.matrix[2][1] = 0;
     rgb2rgb2.matrix[2][2] = 256;
-
+    /*
     if(strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0){
         rgb2rgb2.matrix[0][0] = 360;
         rgb2rgb2.matrix[0][1] = -153;
@@ -159,7 +159,7 @@ void ALG_SIG_config(IALG_Handle handle)
         rgb2rgb2.matrix[2][1] = -338;
         rgb2rgb2.matrix[2][2] = 557;
     }
-
+    */
     rgb2rgb2.offset[0]    = 0;
     rgb2rgb2.offset[1]    = 0;
     rgb2rgb2.offset[2]    = 0;
@@ -187,7 +187,7 @@ void ALG_SIG_config(IALG_Handle handle)
 
 void print_debug(int frames, int leave_frames, IAEWBF_SIG_Obj *hn){
     int i = 0, fr = frames%leave_frames, all = frames%150;
-
+    all = fr;
 
     if(DEBUG && (!fr)){
         if(gIRCut != hn->gIRCut || gBWMode != hn->gBWMode || FPShigh != hn->FPShigh ||
@@ -203,16 +203,17 @@ void print_debug(int frames, int leave_frames, IAEWBF_SIG_Obj *hn){
             i++;
         }
 
+        if(hn->Offset.New != hn->Offset.Old || !all){
+            dprintf("%6d   OFFSET       : Off.New = %4d Off.Old = %4d \n", frames, hn->Offset.New, hn->Offset.Old);
+            i++;
+        }
+
         if(hn->Rgain.New != hn->Rgain.Old || hn->Bgain.New != hn->Bgain.Old || !all){
             dprintf("%6d   GAIN WB      : Rgain.New = %4d Rgain.Old = %4d Bgain.New = %4d Bgain.Old = %4d \n",
                     frames, hn->Rgain.New, hn->Rgain.Old, hn->Bgain.New, hn->Bgain.Old);
             i++;
         }
 
-        if(hn->Offset.New != hn->Offset.Old || !all){
-            dprintf("%6d   OFFSET       : Off.New = %4d Off.Old = %4d \n", frames, hn->Offset.New, hn->Offset.Old);
-            i++;
-        }
 
         if(hn->GIFIF.New !=  hn->GIFIF.Old || !all) {
             dprintf("%6d   GAIN IFIF    : GIFIF.New = %4d GIFIF.Old = %4d \n", frames, hn->GIFIF.New, hn->GIFIF.Old);
@@ -224,7 +225,7 @@ void print_debug(int frames, int leave_frames, IAEWBF_SIG_Obj *hn){
             i++;
         }
 
-        if(i) dprintf("Y.New = %4d Y.Old = %4d Y.Min = %4d Y.Max = %4d Y.Diff = %4d Hmin = %4d Hmax = %4d HminA = %4d HmaxA = %4d\n",
+        if(i ) dprintf("Y.New = %4d Y.Old = %4d Y.Min = %4d Y.Max = %4d Y.Diff = %4d Hmin = %4d Hmax = %4d HminA = %4d HmaxA = %4d\n",
                                    hn->Y.New, hn->Y.Old, hn->Y.Min, hn->Y.Max, hn->Y.Diff, hn->Hmin.New, hn->Hmax.New, hn->Hmin.NewA, hn->Hmax.NewA);
 
     }
@@ -314,102 +315,92 @@ void SIG2A_applySettings(void)
         hn->Exp.New = (hn->Exp.Old/hn->Exp.Step)*hn->Exp.Step;
         hn->gFlicker = gFlicker;
     }
-     //Config gamma correction tables
-    /*
-   // if(hn->GISIF.New != hn->GISIF.Old || hn->Exp.New != hn->Exp.Old){
-        dataG.tableSize = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SIZE_512;
-        dataG.tableSrc  = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SELECT_RAM;
-        dataG.bypassR = 0;
-        dataG.bypassG = 0;
-        dataG.bypassB = 0;
-        dataG.tableR = hn->RGB[0].hist;
-        dataG.tableG = hn->RGB[0].hist;
-        dataG.tableB = hn->RGB[0].hist;
-        //Setup gamma tables
-        if(CSL_ipipeSetGammaConfig(&gCSL_ipipeHndl, &dataG) != CSL_SOK)
-            OSA_ERROR("Fail CSL_ipipeSetGammaConfig!!!\n");
-    //}
-    */
     //Seting Expouse
     if(hn->Exp.New != hn->Exp.Old) {
          smooth_change(&hn->Exp, fr);
         DRV_imgsSetEshutter(hn->Exp.Old, 0);
     }
 
-    //ISIF gain seting
-    /*
-    if(hn->GISIF.New != hn->GISIF.Old) {
-        if(hn->RGBgain[0] != hn->GISIF.Range.max && hn->RGBgain[1] != hn->GISIF.Range.max && hn->RGBgain[2] != hn->GISIF.Range.max ){
-            hn->RGBgain[1] = hn->GISIF.New;
-            hn->RGBgain[0] = hn->GISIF.New*hn->RGBgain[0]/hn->GISIF.Old;
-            hn->RGBgain[2] = hn->GISIF.New*hn->RGBgain[2]/hn->GISIF.Old;
+    if(gHDR){
+        //Config gamma correction tables
+        if(hn->Rgain.New != hn->Rgain.Old || hn->Bgain.New != hn->Bgain.Old){
+            dataG.tableSize = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SIZE_512;
+            dataG.tableSrc  = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SELECT_RAM;
+            dataG.bypassR = 0;
+            dataG.bypassG = dataG.bypassR;
+            dataG.bypassB = dataG.bypassR;
+            dataG.tableR = hn->RGB[0];
+            dataG.tableG = hn->RGB[1];
+            dataG.tableB = hn->RGB[2];
+            //Setup gamma tables
+            if(CSL_ipipeSetGammaConfig(&gCSL_ipipeHndl, &dataG) != CSL_SOK)
+                OSA_ERROR("Fail CSL_ipipeSetGammaConfig!!!\n");
         }
-        hn->GISIF.Old = hn->GISIF.New;
-        //OSA_printf("SIG2A_applySettings: new = %d old = %d Rgain = %d Ggain = %d Bgain = %d\n",
-        //           hn->GISIF.New, hn->GISIF.Old, hn->RGBgain[0], hn->RGBgain[1], hn->RGBgain[2]);
-    }*/
-    //if(hn->GISIF.New != hn->GISIF.Old) {
-    if(hn->Rgain.New != hn->Rgain.Old || hn->Bgain.New != hn->Bgain.Old){
-        smooth_change(&hn->Rgain, fr);
-        smooth_change(&hn->Bgain, fr);
-        DRV_isifSetDgain(512 , hn->Rgain.New, hn->Bgain.New, 512, 0);
-        //hn->Rgain.Old = hn->Rgain.New;
-        //hn->Bgain.Old = hn->Bgain.New;
-    }
-
-    if(hn->Offset.New != hn->Offset.Old) {
-        smooth_change(&hn->Offset, fr);
-        DRV_ipipeSetWbOffset(-hn->Offset.New);
-        //hn->Offset.Old = hn->Offset.New;
-    }
-
-    //DRV_isifSetDgain(512, 512, 512, 512, 0);
-    //gain = hn->Gain.New - hn->RGBgain[hn->maxi];
-    //DRV_isifSetDgain(gain + hn->RGBgain[1] , gain + hn->RGBgain[0], gain + hn->RGBgain[2], gain + hn->RGBgain[1], 0);
-    //gain = hn->Gain.New - hn->RGBgain[hn->maxi];
+    } else {
+        //ISIF gain seting
+        if(hn->Rgain.New != hn->Rgain.Old || hn->Bgain.New != hn->Bgain.Old){
+            smooth_change(&hn->Rgain, fr);
+            smooth_change(&hn->Bgain, fr);
+            DRV_isifSetDgain(512 , hn->Rgain.New, hn->Bgain.New, 512, 0);
+            //hn->Rgain.Old = hn->Rgain.New;
+            //hn->Bgain.Old = hn->Bgain.New;
+        }
 
 
-    //gain = (4000<<9)/(hn->Hmax[0] - hn->Hmin[0]);
-    if(hn->GIFIF.New !=  hn->GIFIF.Old){
-        smooth_change(&hn->GIFIF, fr);
-        ipipeWb.gainR  = hn->GIFIF.New;
-        ipipeWb.gainGr = hn->GIFIF.New;
-        ipipeWb.gainGb = hn->GIFIF.New;
-        ipipeWb.gainB  = hn->GIFIF.New;
-        DRV_ipipeSetWb(&ipipeWb);
-        //hn->GIFIF.Old = hn->GIFIF.New;
-    }
+        if(hn->Offset.New != hn->Offset.Old) {
+            smooth_change(&hn->Offset, fr);
+            DRV_ipipeSetWbOffset(-hn->Offset.New);
+            //hn->Offset.Old = hn->Offset.New;
+        }
 
-    //offset = hn->Hmin[0] > 2047 ? 2047 : hn->Hmin[0];
-    //OSA_printf("SIG2A_applySettings: ofset = %d gain = %d\n", -offset, gain);
-    //DRV_ipipeSetWbOffset(-offset);
+        //DRV_isifSetDgain(512, 512, 512, 512, 0);
+        //gain = hn->Gain.New - hn->RGBgain[hn->maxi];
+        //DRV_isifSetDgain(gain + hn->RGBgain[1] , gain + hn->RGBgain[0], gain + hn->RGBgain[2], gain + hn->RGBgain[1], 0);
+        //gain = hn->Gain.New - hn->RGBgain[hn->maxi];
 
 
-    //Config RGB2RGB matrix for more gain
-    if(hn->Grgb2rgb.New !=  hn->Grgb2rgb.Old){
-        smooth_change(&hn->Grgb2rgb, fr);
-        rgb2rgb.matrix[0][0] = hn->Grgb2rgb.New; //hn->RGBgain[0]*hn->Grgb2rgb.New>>8; //hn->RGBgain[0]; //hn->Grgb2rgb.New;
-        rgb2rgb.matrix[0][1] = 0;
-        rgb2rgb.matrix[0][2] = 0;
+        //gain = (4000<<9)/(hn->Hmax[0] - hn->Hmin[0]);
+        if(hn->GIFIF.New !=  hn->GIFIF.Old){
+            smooth_change(&hn->GIFIF, fr);
+            ipipeWb.gainR  = hn->GIFIF.New;
+            ipipeWb.gainGr = hn->GIFIF.New;
+            ipipeWb.gainGb = hn->GIFIF.New;
+            ipipeWb.gainB  = hn->GIFIF.New;
+            DRV_ipipeSetWb(&ipipeWb);
+            //hn->GIFIF.Old = hn->GIFIF.New;
+        }
 
-        rgb2rgb.matrix[1][0] = 0;
-        rgb2rgb.matrix[1][1] = hn->Grgb2rgb.New; //hn->RGBgain[1]*hn->Grgb2rgb.New>>8; //hn->RGBgain[1]; //hn->Grgb2rgb.New;
-        rgb2rgb.matrix[1][2] = 0;
+        //offset = hn->Hmin[0] > 2047 ? 2047 : hn->Hmin[0];
+        //OSA_printf("SIG2A_applySettings: ofset = %d gain = %d\n", -offset, gain);
+        //DRV_ipipeSetWbOffset(-offset);
 
-        rgb2rgb.matrix[2][0] = 0;
-        rgb2rgb.matrix[2][1] = 0;
-        rgb2rgb.matrix[2][2] = hn->Grgb2rgb.New; //hn->RGBgain[2]*hn->Grgb2rgb.New>>8; //hn->RGBgain[2]; //hn->Grgb2rgb.New;
 
-        rgb2rgb.offset[0]    = 0;
-        rgb2rgb.offset[1]    = 0;
-        rgb2rgb.offset[2]    = 0;
+        //Config RGB2RGB matrix for more gain
+        if(hn->Grgb2rgb.New !=  hn->Grgb2rgb.Old){
+            smooth_change(&hn->Grgb2rgb, fr);
+            rgb2rgb.matrix[0][0] = hn->Grgb2rgb.New; //hn->RGBgain[0]*hn->Grgb2rgb.New>>8; //hn->RGBgain[0]; //hn->Grgb2rgb.New;
+            rgb2rgb.matrix[0][1] = 0;
+            rgb2rgb.matrix[0][2] = 0;
 
-        if(DRV_ipipeSetRgb2Rgb(&rgb2rgb) != CSL_SOK)
-            OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
-        //if(DRV_ipipeSetRgb2Rgb2(&rgb2rgb) != CSL_SOK)
-        //    OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
+            rgb2rgb.matrix[1][0] = 0;
+            rgb2rgb.matrix[1][1] = hn->Grgb2rgb.New; //hn->RGBgain[1]*hn->Grgb2rgb.New>>8; //hn->RGBgain[1]; //hn->Grgb2rgb.New;
+            rgb2rgb.matrix[1][2] = 0;
 
-        //hn->Grgb2rgb.Old = hn->Grgb2rgb.New;
+            rgb2rgb.matrix[2][0] = 0;
+            rgb2rgb.matrix[2][1] = 0;
+            rgb2rgb.matrix[2][2] = hn->Grgb2rgb.New; //hn->RGBgain[2]*hn->Grgb2rgb.New>>8; //hn->RGBgain[2]; //hn->Grgb2rgb.New;
+
+            rgb2rgb.offset[0]    = 0;
+            rgb2rgb.offset[1]    = 0;
+            rgb2rgb.offset[2]    = 0;
+
+            if(DRV_ipipeSetRgb2Rgb(&rgb2rgb) != CSL_SOK)
+                OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
+            //if(DRV_ipipeSetRgb2Rgb2(&rgb2rgb) != CSL_SOK)
+            //    OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
+
+            //hn->Grgb2rgb.Old = hn->Grgb2rgb.New;
+        }
     }
     frames++;
 }

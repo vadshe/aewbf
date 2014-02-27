@@ -84,3 +84,4 @@ src/gamma.c
 src/aewbf_control.c
 src/alg_motionDetect.c
 include/alg_motionDetect.h
+copy1

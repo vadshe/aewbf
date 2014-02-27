@@ -384,6 +384,7 @@ int ALG_motionDetectStart(ALG_MotionObj  *pObj)
 
 	pObj->MvDataOffset = 0;
 
+
 	// Find adaptive threshold
 	if (sig_md.adaptive_threshold) {
 		if (pObj->frame_count % 30 == 0) {
@@ -397,7 +398,7 @@ int ALG_motionDetectStart(ALG_MotionObj  *pObj)
                     yx = yw + x;
                     if(en[yx]) {
                         hi[mbMV_data[yx].SAD>>8]++; //Fill histogram
-                        avr += mbMV_data[yx].SAD;
+                        //avr += mbMV_data[yx].SAD;
                         //hi[mbMV_data->SAD>>8]++; //Fill histogram
                         //avr += mbMV_data->SAD;
                         //if      (max < mbMV_data->SAD) max = mbMV_data->SAD;
@@ -413,7 +414,7 @@ int ALG_motionDetectStart(ALG_MotionObj  *pObj)
             MV_th = ecn*80/100;
             for(i=0; sum < MV_th; i++) {
                 sum += hi[i];
-                printf("%  hi = %d sum = %d\n", i, hi[i], sum);
+                //printf("%  hi = %d sum = %d\n", i, hi[i], sum);
             }
             maxi = (i+1)*2;
 
@@ -424,6 +425,8 @@ int ALG_motionDetectStart(ALG_MotionObj  *pObj)
 	} else {  //!sig_md.adaptive_threshold
 		pObj->Sad_Threshold = sig_md.threshold << 8;
 	}
+
+    printf("pObj->Sad_Threshold = %d \n", pObj->Sad_Threshold>>8);
 
     //Integral matrix
     ing[x] = 0;
@@ -441,10 +444,13 @@ int ALG_motionDetectStart(ALG_MotionObj  *pObj)
         }
     }
 
+    printf("ing[sz-1] = %d \n", ing[sz-1]);
+
 	mbMV_data = pObj->runPrm.mbMvInfo;
 	for(y=0; y < h; y++) {
+        yw = y*w;
 		for(x=0; x < w; x++) {
-			yx = y*w + x;
+            yx = yw + x;
 			if (en[yx]) {
 				if(mbMV_data->SAD > pObj->Sad_Threshold){
 					md[yx] = 1; //Motion Detected
@@ -459,6 +465,7 @@ int ALG_motionDetectStart(ALG_MotionObj  *pObj)
 		}
 	}
 
+    printf("ing[sz-1] = %d \n", ing[sz-1]);
 	//if (pObj->frame_count % 5 == 0)
 	{
 	    //print_chars2d("Detected", md, w, h);
@@ -470,9 +477,10 @@ int ALG_motionDetectStart(ALG_MotionObj  *pObj)
 	}
 	//Check if MB have two or more neighbors
 	for(y=1; y < (h-1); y++) {
+        yw = y*w;
 		for(x=1; x < (w-1); x++) {
             size_t cn = 0;
-			yx = y*w + x;
+            yx = yw + x;
 			if (md[yx]) {
 				size_t i;
 				for(i=0; i < 8; i++) {
@@ -480,8 +488,8 @@ int ALG_motionDetectStart(ALG_MotionObj  *pObj)
 				}
 				if(cn > 2 && detect_cnt > 10) {
 #if 1
-                    dflog(LOG_INFO, "%s():%u detect_cnt: %d avr: %d  maxi: %d ing: %d Sad_Threshold: %d frame_count: %d",
-                      __func__, __LINE__, detect_cnt, avr, maxi, ing[sz-1], pObj->Sad_Threshold>>8, pObj->frame_count);
+                    dflog(LOG_INFO, "%s():%u detect_cnt: %d maxi: %d ing: %d Sad_Threshold: %d frame_count: %d",
+                      __func__, __LINE__, detect_cnt, maxi, ing[sz-1], pObj->Sad_Threshold>>8, pObj->frame_count);
 #endif
 					out_motion_detected(md, sz);
 					return ALG_MOTION_S_DETECT;
