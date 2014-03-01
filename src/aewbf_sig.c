@@ -134,7 +134,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
     static int frames = 0;
     int GN[3];
 
-    int A = 512, B = 2496, g1 = 3, g2 = 5;
+    int A = 512 - ZERO, B = 2496 - ZERO, g1 = 3, g2 = 5;
     int Ai = A>>3, Bi = (((B - A)<<g1) + A)>>3;
     int A1 = A>>3, B1 = B>>3;
 
@@ -166,10 +166,9 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             b = box[i  ]>>5;
 
             Y1 = (117*b + 601*g + 306*r)>>10;
+            Y += Y1;
 
-            hist[r]++;
-            hist[g]++;
-            hist[b]++;
+            hist[r]++; hist[g]++; hist[b]++;
 
             if(gHDR){
                 r = lut[r];
@@ -185,7 +184,6 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                     GR[j] += abs(g - (r*(512 + GN[j])>>9));
                 }
             }
-            Y += Y1;
         }
 
         Y = Y/sz<<3;
@@ -199,7 +197,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         hn->Hmin.New = i;
 
         for(i=hsz-1; (sz3 - hist[i]) < hn->SatTh; i--);
-        hn->Hmax.New = i;
+        hn->Hmax.New = i+1;
 
         //Add more gain in night mode
 
@@ -250,6 +248,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         dprintf("GN[0] = %d GN[1] = %d GN[2] = %d\n", GN[0], GN[1], GN[2]);
 #endif
         //White balance algorithm
+
         min = GR[0]; minr = 0;
         for(j=1; j < ns; j++){
             if(GR[j] < min) { min = GR[j]; minr = j; }
@@ -266,6 +265,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             hn->Bgain.New = hn->Bgain.New + GN[minb];
             //if(DEBUG) dprintf("WB B : BgN %d BgO %d\n", hn->Bgain.New, hn->Bgain.Old);
         }
+
         //Check range
         hn->Rgain.New = hn->Rgain.New > hn->Rgain.Range.max ? hn->Rgain.Range.max : hn->Rgain.New;
         hn->Rgain.New = hn->Rgain.New < hn->Rgain.Range.min ? hn->Rgain.Range.min : hn->Rgain.New;
@@ -356,33 +356,38 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
 
         if(gHDR) {
             //Make gamma table for each color
-            int vl0, vl1, A2, B2, st, hsz1;
-            int min1, max1, tm[4];
-
+            int vl0, vl1, st;
+            int min1, max1, min2, max2;
 
             //min1 = (hn->Hmin.New<<6)/hn->Rgain.New;
             //max1 = (hn->Hmax.New<<6)/hn->Rgain.New;
             min1 = hn->Hmin.New>>3;
             max1 = hn->Hmax.New>>3;
             st = (1<<20)/(max1 - min1);
-            printf("A1 = %d B1 = %d Rgain = %d Bgain  = %d \n", A1, B1, hn->Rgain.New, hn->Bgain.New);
-            printf("Red   min = %d max = %d st = %d\n", min1, max1, st);
+            printf("A1 = %d B1 = %d Rgain = %d Bgain  = %d min1 = %d max = %d \n", A1, B1, hn->Rgain.New, hn->Bgain.New, min1, max1);
 
             //Red gamma table
-            hsz1 = (hsz<<9)/hn->Rgain.New;
-            hsz1 = hsz1 > 512 ? 512 : hsz1;
-            for(i=0; i < hsz1; i++){
-                r = lut[i*hn->Rgain.New>>9];
+            for(i=0; i < hsz; i++){
+                r = lut[i]*hn->Rgain.New>>9;
                 if(r > Ai){
                     if(r > Bi) r = ((r-Bi)>>g2) + Bi;
                     else r = ((r-Ai)>>g1) + Ai;
                 }
+                //printf("%d  r = %d ", i, r);
+                if(r < min1) min2 = i;
+                if(r < max1) max2 = i;
+                if(r > max1) break;
                 hn->RGB[0][i] = r;
             }
+            min2++; max2++;
+            //printf("\n");
+
+            //st = (1<<20)/(max2 - min2);
+            printf("Red   min2 = %d max2 = %d st = %d\n", min2, max2, st);
             vl0 = 0;
             for(i=0; i < hsz; i++){
-                if(hn->RGB[0][i] < min1) vl1 = 0;
-                else if(hn->RGB[0][i] >= min1 && hn->RGB[0][i] < max1) {
+                if(i < min2) vl1 = 0;
+                else if(i >= min2 && i < max2) {
                     vl1 = (hn->RGB[0][i] - min1)*st>>10;
                 }
                 else vl1 = 1023;
@@ -391,6 +396,8 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             }
 
             //Green gamma table
+
+            printf("Green min2 = %d max2 = %d st = %d\n", min1, max1, st);
             vl0 = 0;
             for(i=0; i < 512; i++){
                 if(i < min1) vl1 = 0;
@@ -403,20 +410,25 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             }
 
             //Blue gamma table
-            hsz1 = (hsz<<9)/hn->Bgain.New;
-            hsz1 = hsz1 > 512 ? 512 : hsz1;
-            for(i=0; i < hsz1; i++){
-                r = lut[i*hn->Bgain.New>>9];
+            for(i=0; i < hsz; i++){
+                r = lut[i]*hn->Bgain.New>>9;
                 if(r > Ai){
                     if(r > Bi) r = ((r-Bi)>>g2) + Bi;
                     else r = ((r-Ai)>>g1) + Ai;
                 }
+                if(r < min1) min2 = i;
+                if(r < max1) max2 = i;
+                if(r > max1) break;
                 hn->RGB[2][i] = r;
             }
+            min2++; max2++;
+
+            //st = (1<<20)/(max2 - min2);
+            printf("Blue  min2 = %d max2 = %d st = %d\n", min2, max2, st);
             vl0 = 0;
             for(i=0; i < hsz; i++){
-                if(hn->RGB[2][i] < min1) vl1 = 0;
-                else if(hn->RGB[2][i] >= min1 && hn->RGB[2][i] < max1) {
+                if(i < min2) vl1 = 0;
+                else if(i >= min2 && i < max2) {
                     vl1 = (hn->RGB[2][i] - min1)*st>>10;
                 }
                 else vl1 = 1023;

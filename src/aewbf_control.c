@@ -80,11 +80,10 @@ void ALG_SIG_config(IALG_Handle handle)
 
     DRV_imgsSetEshutter(hn->Exp.Range.max, 0); //Max expouse
     DRV_imgsSetFramerate(defaultFPS); //Max FPS frame rate
-    ALG_aewbSetSensorDcsub(176); //176 Offset for SONY IMX136
-    //ALG_aewbSetSensorDcsub(170); //170 Offset for Aptina MT9P006
-    //DRV_imgsNDShutterInit();
-    //DRV_imgsNDShutter(1, gBWMode); //Close IR-cut
 
+    //if(gHDR) ALG_aewbSetSensorDcsub(0);
+    //else ALG_aewbSetSensorDcsub(176); //176 Offset for SONY IMX136
+    ALG_aewbSetSensorDcsub(ZERO); //176
     //DRV_imgsSetCompress(9, 10, 1, 6);
     //DRV_imgsSetCompress(8, 10, 2, 5);
     //DRV_imgsSetCompress(6, 12, 3, 6);
@@ -145,21 +144,22 @@ void ALG_SIG_config(IALG_Handle handle)
     rgb2rgb2.matrix[2][0] = 0;
     rgb2rgb2.matrix[2][1] = 0;
     rgb2rgb2.matrix[2][2] = 256;
-    /*
-    if(strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0){
-        rgb2rgb2.matrix[0][0] = 360;
-        rgb2rgb2.matrix[0][1] = -153;
-        rgb2rgb2.matrix[0][2] = 49;
 
-        rgb2rgb2.matrix[1][0] = -92;
-        rgb2rgb2.matrix[1][1] = 312;
-        rgb2rgb2.matrix[1][2] = 36;
+    if(!gHDR) {
+        if(strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0){
+            rgb2rgb2.matrix[0][0] = 360;
+            rgb2rgb2.matrix[0][1] = -153;
+            rgb2rgb2.matrix[0][2] = 49;
 
-        rgb2rgb2.matrix[2][0] = 37;
-        rgb2rgb2.matrix[2][1] = -338;
-        rgb2rgb2.matrix[2][2] = 557;
+            rgb2rgb2.matrix[1][0] = -92;
+            rgb2rgb2.matrix[1][1] = 312;
+            rgb2rgb2.matrix[1][2] = 36;
+
+            rgb2rgb2.matrix[2][0] = 37;
+            rgb2rgb2.matrix[2][1] = -338;
+            rgb2rgb2.matrix[2][2] = 557;
+        }
     }
-    */
     rgb2rgb2.offset[0]    = 0;
     rgb2rgb2.offset[1]    = 0;
     rgb2rgb2.offset[2]    = 0;
