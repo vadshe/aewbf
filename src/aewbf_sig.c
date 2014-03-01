@@ -135,6 +135,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
     int GN[3];
 
     int A = 512 - ZERO, B = 2496 - ZERO, g1 = 3, g2 = 5;
+    int Ai1 = A, Bi1 = (((B - A)<<g1) + A);
     int Ai = A>>3, Bi = (((B - A)<<g1) + A)>>3;
     int A1 = A>>3, B1 = B>>3;
 
@@ -150,7 +151,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         for(j=0; j < ns; j++) { GR[j] = 0; GB[j] = 0; }
 
         if(gHDR){
-            //Make LUT
+            //Make LUTs
             for(i=0; i < hsz; i++){
                 if(i > A1){
                     if(i > B1) lut[i] = ((i-B1)<<g2) + Bi;
@@ -356,7 +357,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
 
         if(gHDR) {
             //Make gamma table for each color
-            int vl0, vl1, st;
+            int vl0, vl1, st, r1;
             int min1, max1, min2, max2;
 
             //min1 = (hn->Hmin.New<<6)/hn->Rgain.New;
@@ -364,31 +365,22 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             min1 = hn->Hmin.New>>3;
             max1 = hn->Hmax.New>>3;
             st = (1<<20)/(max1 - min1);
+            min2 = min1<<3;
             printf("A1 = %d B1 = %d Rgain = %d Bgain  = %d min1 = %d max = %d \n", A1, B1, hn->Rgain.New, hn->Bgain.New, min1, max1);
 
             //Red gamma table
-            for(i=0; i < hsz; i++){
-                r = lut[i]*hn->Rgain.New>>9;
-                if(r > Ai){
-                    if(r > Bi) r = ((r-Bi)>>g2) + Bi;
-                    else r = ((r-Ai)>>g1) + Ai;
-                }
-                //printf("%d  r = %d ", i, r);
-                if(r < min1) min2 = i;
-                if(r < max1) max2 = i;
-                if(r > max1) break;
-                hn->RGB[0][i] = r;
-            }
-            min2++; max2++;
-            //printf("\n");
-
-            //st = (1<<20)/(max2 - min2);
-            printf("Red   min2 = %d max2 = %d st = %d\n", min2, max2, st);
             vl0 = 0;
             for(i=0; i < hsz; i++){
-                if(i < min2) vl1 = 0;
-                else if(i >= min2 && i < max2) {
-                    vl1 = (hn->RGB[0][i] - min1)*st>>10;
+                r = lut[i]*hn->Rgain.New>>6;
+                if(r > Ai1){
+                    if(r > Bi1) r = ((r-Bi1)>>g2) + Bi1;
+                    else r = ((r-Ai1)>>g1) + Ai1;
+                }
+                r1 = r>>3;
+
+                if(r1 < min1) vl1 = 0;
+                else if(r1 >= min1  && r1 < max1) {
+                    vl1 = (r - min2)*st>>13;
                 }
                 else vl1 = 1023;
                 hn->RGB[0][i] = (vl0<<10) | (vl1 - vl0);
@@ -396,8 +388,6 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             }
 
             //Green gamma table
-
-            printf("Green min2 = %d max2 = %d st = %d\n", min1, max1, st);
             vl0 = 0;
             for(i=0; i < 512; i++){
                 if(i < min1) vl1 = 0;
@@ -410,26 +400,18 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             }
 
             //Blue gamma table
-            for(i=0; i < hsz; i++){
-                r = lut[i]*hn->Bgain.New>>9;
-                if(r > Ai){
-                    if(r > Bi) r = ((r-Bi)>>g2) + Bi;
-                    else r = ((r-Ai)>>g1) + Ai;
-                }
-                if(r < min1) min2 = i;
-                if(r < max1) max2 = i;
-                if(r > max1) break;
-                hn->RGB[2][i] = r;
-            }
-            min2++; max2++;
-
-            //st = (1<<20)/(max2 - min2);
-            printf("Blue  min2 = %d max2 = %d st = %d\n", min2, max2, st);
             vl0 = 0;
             for(i=0; i < hsz; i++){
-                if(i < min2) vl1 = 0;
-                else if(i >= min2 && i < max2) {
-                    vl1 = (hn->RGB[2][i] - min1)*st>>10;
+                r = lut[i]*hn->Bgain.New>>6;
+                if(r > Ai1){
+                    if(r > Bi1) r = ((r-Bi1)>>g2) + Bi1;
+                    else r = ((r-Ai1)>>g1) + Ai1;
+                }
+                r1 = r>>3;
+
+                if(r1 < min1) vl1 = 0;
+                else if(r1 >= min1  && r1 < max1) {
+                    vl1 = (r - min2)*st>>13;
                 }
                 else vl1 = 1023;
                 hn->RGB[2][i] = (vl0<<10) | (vl1 - vl0);

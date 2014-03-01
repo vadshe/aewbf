@@ -187,7 +187,7 @@ void ALG_SIG_config(IALG_Handle handle)
 
 void print_debug(int frames, int leave_frames, IAEWBF_SIG_Obj *hn){
     int i = 0, fr = frames%leave_frames, all = frames%150;
-    all = fr;
+    //all = fr;
 
     if(DEBUG && (!fr)){
         if(gIRCut != hn->gIRCut || gBWMode != hn->gBWMode || FPShigh != hn->FPShigh ||
