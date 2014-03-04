@@ -145,21 +145,56 @@ void ALG_SIG_config(IALG_Handle handle)
     rgb2rgb2.matrix[2][1] = 0;
     rgb2rgb2.matrix[2][2] = 256;
 
-    if(!gHDR) {
-        if(strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0){
-            rgb2rgb2.matrix[0][0] = 360;
-            rgb2rgb2.matrix[0][1] = -153;
-            rgb2rgb2.matrix[0][2] = 49;
+    if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9M034_720P") == 0) {
+        rgb2rgb2.matrix[0][0] = 427;
+        rgb2rgb2.matrix[0][1] = -105;
+        rgb2rgb2.matrix[0][2] = -66;
 
-            rgb2rgb2.matrix[1][0] = -92;
-            rgb2rgb2.matrix[1][1] = 312;
-            rgb2rgb2.matrix[1][2] = 36;
+        rgb2rgb2.matrix[1][0] = -99;
+        rgb2rgb2.matrix[1][1] = 422;
+        rgb2rgb2.matrix[1][2] = -67;
 
-            rgb2rgb2.matrix[2][0] = 37;
-            rgb2rgb2.matrix[2][1] = -338;
-            rgb2rgb2.matrix[2][2] = 557;
-        }
+        rgb2rgb2.matrix[2][0] = -8;
+        rgb2rgb2.matrix[2][1] = -78;
+        rgb2rgb2.matrix[2][2] = 342;
+    } else if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0) {
+        rgb2rgb2.matrix[0][0] = 380;
+        rgb2rgb2.matrix[0][1] = -59;
+        rgb2rgb2.matrix[0][2] = -66;
+
+        rgb2rgb2.matrix[1][0] = -89;
+        rgb2rgb2.matrix[1][1] = 402;
+        rgb2rgb2.matrix[1][2] = -57;
+
+        rgb2rgb2.matrix[2][0] = -8;
+        rgb2rgb2.matrix[2][1] = -98;
+        rgb2rgb2.matrix[2][2] = 362;
+    } else if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9P031_5MP") == 0) {
+        rgb2rgb2.matrix[0][0] = 380;
+        rgb2rgb2.matrix[0][1] = -59;
+        rgb2rgb2.matrix[0][2] = -66;
+
+        rgb2rgb2.matrix[1][0] = -89;
+        rgb2rgb2.matrix[1][1] = 402;
+        rgb2rgb2.matrix[1][2] = -57;
+
+        rgb2rgb2.matrix[2][0] = -8;
+        rgb2rgb2.matrix[2][1] = -168;
+        rgb2rgb2.matrix[2][2] = 432;
+    } else if(strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0 && !gHDR){
+        rgb2rgb2.matrix[0][0] = 360;
+        rgb2rgb2.matrix[0][1] = -153;
+        rgb2rgb2.matrix[0][2] = 49;
+
+        rgb2rgb2.matrix[1][0] = -92;
+        rgb2rgb2.matrix[1][1] = 312;
+        rgb2rgb2.matrix[1][2] = 36;
+
+        rgb2rgb2.matrix[2][0] = 37;
+        rgb2rgb2.matrix[2][1] = -338;
+        rgb2rgb2.matrix[2][2] = 557;
     }
+
     rgb2rgb2.offset[0]    = 0;
     rgb2rgb2.offset[1]    = 0;
     rgb2rgb2.offset[2]    = 0;
@@ -213,7 +248,6 @@ void print_debug(int frames, int leave_frames, IAEWBF_SIG_Obj *hn){
                     frames, hn->Rgain.New, hn->Rgain.Old, hn->Bgain.New, hn->Bgain.Old);
             i++;
         }
-
 
         if(hn->GIFIF.New !=  hn->GIFIF.Old || !all) {
             dprintf("%6d   GAIN IFIF    : GIFIF.New = %4d GIFIF.Old = %4d \n", frames, hn->GIFIF.New, hn->GIFIF.Old);

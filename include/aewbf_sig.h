@@ -85,7 +85,7 @@ typedef struct IAEWBF_SIG_Obj {
     int FPShigh; //FPS 1-high, 0 - low
 } IAEWBF_SIG_Obj;
 
-#define ZERO 176 //Sony IMX136 zero level
+#define ZERO 176 //176 Sony IMX136 zero level
 
 extern Int IAEWBF_SIG_alloc(const IALG_Params *algParams, IALG_Fxns **pf, IALG_MemRec memTab[]);
 

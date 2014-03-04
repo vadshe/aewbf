@@ -22,7 +22,7 @@ int FPShigh = 1; //FPS 1-high, 0 - low
 extern int gHDR;
 extern int DEBUG;
 extern ALG_AewbfObj gSIG_Obj;
-#define HISTTH 60
+#define HISTTH 50
 
 extern int DRV_imgsMotorStep(int type, int direction, int steps);
 extern int OSA_fileReadFile(const char *fileName, void *addr, size_t readSize, size_t *actualReadSize);
@@ -129,15 +129,17 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
     Uint32 hsz = ALG_SENSOR_BITS;
     Uint32 minr, minb, min, max;
     //Uint32 fp = 512, sp = 2304, fg = 1, sg = 7;
-    Uint32 hist[hsz], lut[hsz];
+    Uint32 hist[hsz], lut[hsz], lut1[hsz<<3];
     Uint32 upth = sz3/8, downth = sz3>>1,  mid, uphalf;
     static int frames = 0;
-    int GN[3];
+    int GN[3], wbt = 0, sum;
 
-    int A = 512 - ZERO, B = 2496 - ZERO, g1 = 3, g2 = 5;
-    int Ai1 = A, Bi1 = (((B - A)<<g1) + A);
-    int Ai = A>>3, Bi = (((B - A)<<g1) + A)>>3;
-    int A1 = A>>3, B1 = B>>3;
+    int A = 1024 - ZERO, B = 2944 - ZERO, g1 = 3, g2 = 6;
+    int ga = (1<<g1)-1, gb = (1<<(g2-g1))-1;
+    int Ai = A, Bi = (((B - A)<<g1) + A);
+    //int Ai = A>>3, Bi = (((B - A)<<g1) + A)>>3;
+    int A1 = A>>3, B1 = B>>3, A1h = A1>>1, Ah = 0;
+    int An, Bn;
 
     GN[0] = 8; GN[1] = 0; GN[2] = -8;
     //gr = (1<<27)/hn->Rgain.New;
@@ -152,29 +154,68 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
 
         if(gHDR){
             //Make LUTs
+            /*
             for(i=0; i < hsz; i++){
                 if(i > A1){
                     if(i > B1) lut[i] = ((i-B1)<<g2) + Bi;
                     else lut[i] = ((i-A1)<<g1) + Ai;
                 } else lut[i] = i;
             }
+            */
+            for(i=0; i < hsz; i++){
+                j = i<<3;
+                if(j > A){
+                    if(j > B) lut[i] = ((j-B)<<g2) + Bi;
+                    else lut[i] = ((j-A)<<g1) + Ai;
+                } else lut[i] = j;
+            }
+
+            //An = A1>>g1;
+            //Bn = An + (B1-A1)*B1/(B1 + (B1-A1)*gb);
+            /*
+            An = A1h + (A1-A1h)*A1/(A1 + (A1-A1h)*ga);
+            for(i=0; i < hsz; i++){
+
+                if(i < A1) {
+                    if(i < A1h) lut1[i] = i;
+                    else lut1[i] = A1h + (i-A1h)*A1/(A1 + (i-A1h)*ga);
+                }
+                //else if(i >= A1 && i < B1) lut1[i] = An + (i-A1)*B1/(B1 + (i-A1)*gb) ;
+                //else lut1[i] = Bn + (i-B1);
+                else lut1[i] = An + (i-A1);
+            }*/
+
+            An = Ah + (A-Ah)*A/(A + (A-Ah)*ga);
+            for(i=0; i < 4096; i++){
+
+                if(i < A) {
+                    if(i < Ah) lut1[i] = i;
+                    else lut1[i] = Ah + (i-Ah)*A/(A + (i-Ah)*ga);
+                }
+                //else if(i >= A1 && i < B1) lut1[i] = An + (i-A1)*B1/(B1 + (i-A1)*gb) ;
+                //else lut1[i] = Bn + (i-B1);
+                else lut1[i] = An + (i-A);
+            }
+
         }
 
         for(i=0; i < sz4; i+=4) {
             //AE and WB
-            r = box[i+2]>>5;
-            g = box[i+1]>>5;
-            b = box[i  ]>>5;
+            r = box[i+2]>>2;
+            g = box[i+1]>>2;
+            b = box[i  ]>>2;
 
             Y1 = (117*b + 601*g + 306*r)>>10;
             Y += Y1;
 
-            hist[r]++; hist[g]++; hist[b]++;
+            hist[r>>3]++;
+            hist[g>>3]++;
+            hist[b>>3]++;
 
             if(gHDR){
-                r = lut[r];
-                g = lut[g];
-                b = lut[b];
+                r = lut[r>>3];
+                g = lut[g>>3];
+                b = lut[b>>3];
                 for(j=0; j < ns; j++) {
                     GB[j] += abs(g - (b*(hn->Bgain.New + GN[j])>>9));
                     GR[j] += abs(g - (r*(hn->Rgain.New + GN[j])>>9));
@@ -187,7 +228,8 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             }
         }
 
-        Y = Y/sz<<3;
+        //Y = Y/sz<<3;
+        Y = Y/sz;
         hn->Y.New = Y;
         //Make integral histogram
 
@@ -200,8 +242,15 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         for(i=hsz-1; (sz3 - hist[i]) < hn->SatTh; i--);
         hn->Hmax.New = i+1;
 
-        //Add more gain in night mode
+        //Find threshould for WB, half of histogram
+        /*
+        sum = 0;
+        for(i=0; sum < sz2; i++) sum += hist[i];
+        wbt = lut[i];
+        printf("wbt = %d\n", wbt);
+        */
 
+        //Add more gain in night mode
         if(!FPShigh && !IRcutClose){
             //The middle of histogram
             mid = (hn->Hmax.New - hn->Hmin.New)>>1;
@@ -325,7 +374,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                 //if(DEBUG) dprintf("FPS DOWN : YN %d YO %d \n", hn->Y.New, hn->Y.Old);
             }
         }
-        if ( FPShigh == 0 && IRcutClose == 1 && Y > 170) {
+        if ( FPShigh == 0 && IRcutClose == 1 && Y > 180) {
             frame_count += leave_frames;
             if (frame_count > 200) {
                 FPShigh = 1;
@@ -345,7 +394,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                 }
             }
             //Come back to day mode
-            if ( FPShigh == 0 && IRcutClose == 0 && Y > 170) {
+            if ( FPShigh == 0 && IRcutClose == 0 && Y > 180) {
                 frame_count += leave_frames;
                 if (frame_count > 200) {
                     IRcutClose = 1;
@@ -357,8 +406,8 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
 
         if(gHDR) {
             //Make gamma table for each color
-            int vl0, vl1, st, r1;
-            int min1, max1, min2, max2;
+            int vl0, vl1, st, st1, r1;
+            int min1, max1, min2, minn, maxn, minn2;
 
             //min1 = (hn->Hmin.New<<6)/hn->Rgain.New;
             //max1 = (hn->Hmax.New<<6)/hn->Rgain.New;
@@ -366,21 +415,26 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             max1 = hn->Hmax.New>>3;
             st = (1<<20)/(max1 - min1);
             min2 = min1<<3;
-            printf("A1 = %d B1 = %d Rgain = %d Bgain  = %d min1 = %d max = %d \n", A1, B1, hn->Rgain.New, hn->Bgain.New, min1, max1);
+            minn = lut1[min1<<3];
+            maxn = lut1[max1<<3];
+            //minn2 = lut1[min1<<3];
+            st1 = (1<<23)/(maxn - minn);
 
             //Red gamma table
             vl0 = 0;
             for(i=0; i < hsz; i++){
-                r = lut[i]*hn->Rgain.New>>6;
-                if(r > Ai1){
-                    if(r > Bi1) r = ((r-Bi1)>>g2) + Bi1;
-                    else r = ((r-Ai1)>>g1) + Ai1;
+                r = lut[i]*hn->Rgain.New>>9;
+                if(r > Ai){
+                    if(r > Bi) r = ((r-Bi)>>g2) + Bi;
+                    else r = ((r-Ai)>>g1) + Ai;
                 }
                 r1 = r>>3;
 
                 if(r1 < min1) vl1 = 0;
                 else if(r1 >= min1  && r1 < max1) {
-                    vl1 = (r - min2)*st>>13;
+                    //vl1 = (r - min2)*st>>13;
+                    vl1 = (lut1[r] - minn)*st1>>13;
+
                 }
                 else vl1 = 1023;
                 hn->RGB[0][i] = (vl0<<10) | (vl1 - vl0);
@@ -388,6 +442,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             }
 
             //Green gamma table
+            /*
             vl0 = 0;
             for(i=0; i < 512; i++){
                 if(i < min1) vl1 = 0;
@@ -398,36 +453,52 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                 hn->RGB[1][i] = (vl0<<10) | (vl1 - vl0);
                 vl0 = vl1;
             }
+            */
+
+            vl0 = 0;
+            for(i=0; i < 512; i++){
+                if(i < min1) vl1 = 0;
+                else if(i >= min1 && i < max1) {
+                    vl1 = (lut1[i<<3] - minn)*st1>>13;
+                }
+                else vl1 = 1023;
+                hn->RGB[1][i] = (vl0<<10) | (vl1 - vl0);
+                vl0 = vl1;
+            }
 
             //Blue gamma table
             vl0 = 0;
             for(i=0; i < hsz; i++){
-                r = lut[i]*hn->Bgain.New>>6;
-                if(r > Ai1){
-                    if(r > Bi1) r = ((r-Bi1)>>g2) + Bi1;
-                    else r = ((r-Ai1)>>g1) + Ai1;
+                r = lut[i]*hn->Bgain.New>>9;
+                if(r > Ai){
+                    if(r > Bi) r = ((r-Bi)>>g2) + Bi;
+                    else r = ((r-Ai)>>g1) + Ai;
                 }
                 r1 = r>>3;
 
                 if(r1 < min1) vl1 = 0;
                 else if(r1 >= min1  && r1 < max1) {
-                    vl1 = (r - min2)*st>>13;
+                    //vl1 = (r - min2)*st>>13;
+                    vl1 = (lut1[r] - minn)*st1>>13;
                 }
                 else vl1 = 1023;
                 hn->RGB[2][i] = (vl0<<10) | (vl1 - vl0);
                 vl0 = vl1;
             }
 
+            printf("A1 = %d B1 = %d Rgain = %d Bgain  = %d min1 = %d max = %d minn = %d maxn = %d st1 = %d\n",
+                   A1, B1, hn->Rgain.New, hn->Bgain.New, min1, max1, minn, maxn, st1);
+            /*
             for(i=0; i < 512; i++){
                 if(i == min1) printf("min1\n");
                 else if(i == max1) printf("max1\n");
                 else if(i == A1) printf("A1\n");
                 else if(i == B1) printf("B1\n");
 
-                printf("%3d R %4d  %4d  G %4d  %4d  B %4d  %4d lut = %d\n",
-                       i, hn->RGB[0][i]>>10, hn->RGB[0][i]&1023, hn->RGB[1][i]>>10, hn->RGB[1][i]&1023, hn->RGB[2][i]>>10, hn->RGB[2][i]&1023, lut[i]);
+                printf("%3d R %4d  %4d  G %4d  %4d  B %4d  %4d lut = %d lut1 = %d\n",
+                       i, hn->RGB[0][i]>>10, hn->RGB[0][i]&1023, hn->RGB[1][i]>>10, hn->RGB[1][i]&1023, hn->RGB[2][i]>>10, hn->RGB[2][i]&1023, lut[i], lut1[i<<3]);
             }
-
+            */
         } else {
 
             //Change the offset
@@ -550,7 +621,7 @@ void AF_SIG_process(int *afEnable)
             if(focus_val > AFMax){
                 maxN = focus_val;
                 if(maxN < maxO){
-                    DRV_imgsMotorStep(1, !dir, 8);
+                    DRV_imgsMotorStep(1, !dir, 6);
                     step = af_end;
                     stepcnt = 0;
                 }
@@ -579,7 +650,6 @@ void AF_SIG_process(int *afEnable)
         } else {
             stepcnt +=2;
             DRV_imgsMotorStep(1, !focusdir, 2); // 2 is optimal step for AF
-
             if(stepcnt > shift){
 
                 if(focus_val > AFMax) {  AFMax = focus_val; maxstep = stepcnt; }
