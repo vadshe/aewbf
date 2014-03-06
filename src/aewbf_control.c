@@ -19,6 +19,7 @@ ALG_AewbfObj gSIG_Obj;
 
 extern DRV_IpipeObj gDRV_ipipeObj;    //For boxcar
 extern CSL_IpipeObj gCSL_ipipeHndl;   //For gamma and rgb2rgb
+extern int OSA_fileWriteFile(const char *fileName, const void *addr, size_t size);
 
 extern int gAePriorityMode, gBWMode, gDayNight, gIRCut, defaultFPS, gFlicker;
 extern int IRcutClose, FPShigh;
@@ -72,6 +73,7 @@ int Get_BoxCar(IALG_Handle handle)
 void ALG_SIG_config(IALG_Handle handle)
 {
     IAEWBF_SIG_Obj *hn = (IAEWBF_SIG_Obj *)handle;
+    char zoomvalue[4];
 
     //Uint32 tables[512];
     CSL_IpipeGammaConfig dataG;
@@ -80,6 +82,14 @@ void ALG_SIG_config(IALG_Handle handle)
 
     DRV_imgsSetEshutter(hn->Exp.Range.max, 0); //Max expouse
     DRV_imgsSetFramerate(defaultFPS); //Max FPS frame rate
+    hn->HISTTH = 60;
+
+    //Zoom in 0 position
+    sprintf(zoomvalue, "%04d", 0);
+    if(OSA_fileWriteFile("/var/run/zoom", zoomvalue, sizeof(zoomvalue)) !=OSA_SOK) {
+        OSA_printf("AF: error write in file\n");
+    }
+
 
     //if(gHDR) ALG_aewbSetSensorDcsub(0);
     //else ALG_aewbSetSensorDcsub(176); //176 Offset for SONY IMX136
@@ -170,6 +180,8 @@ void ALG_SIG_config(IALG_Handle handle)
         rgb2rgb2.matrix[2][1] = -98;
         rgb2rgb2.matrix[2][2] = 362;
     } else if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9P031_5MP") == 0) {
+        //hn->HISTTH = 30; //Reduse threshold to remove nonliniarity
+
         rgb2rgb2.matrix[0][0] = 380;
         rgb2rgb2.matrix[0][1] = -59;
         rgb2rgb2.matrix[0][2] = -66;
@@ -276,7 +288,6 @@ void SIG2A_applySettings(void)
 
     print_debug(frames, leave_frames, hn);
 
-
     //IR-cut dynamic change
     if(gIRCut != hn->gIRCut) {
         if      (gIRCut == ALG_IRCUT_OPEN)  IRcutClose = 0;  // Open
@@ -286,7 +297,7 @@ void SIG2A_applySettings(void)
 
     //Black and color night mode dynamic change
     if(gBWMode != hn->gBWMode) {
-        if (gIRCut == ALG_IRCUT_AUTO || gIRCut == ALG_IRCUT_OPEN) {
+        if (gIRCut == ALG_IRCUT_AUTO && !IRcutClose) {
             DRV_imgsNDShutter(gIRCut, gBWMode);
             //DRV_imgsSetBWmode(gBWMode);
         }
@@ -520,7 +531,7 @@ int SIG_2A_config(IALG_Handle handle)
     hn->Y.Th = 10; //10%
     hn->Y.Diff = 0;
 
-    hn->HmaxTh = 3300;
+    hn->HmaxTh = 3200;
     hn->SatTh = hn->w*hn->h/100;
 
     hn->Hmax.HistC = 0;

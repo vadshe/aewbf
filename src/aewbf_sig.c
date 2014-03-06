@@ -22,7 +22,7 @@ int FPShigh = 1; //FPS 1-high, 0 - low
 extern int gHDR;
 extern int DEBUG;
 extern ALG_AewbfObj gSIG_Obj;
-#define HISTTH 50
+//#define HISTTH 30
 
 extern int DRV_imgsMotorStep(int type, int direction, int steps);
 extern int OSA_fileReadFile(const char *fileName, void *addr, size_t readSize, size_t *actualReadSize);
@@ -30,6 +30,7 @@ extern int OSA_fileWriteFile(const char *fileName, const void *addr, size_t size
 extern void OSA_waitMsecs(Uint32 msecs);
 
 Int32  frame_count = 0, leave_frames = 5, down = 0;
+
 
 #define __DEBUG
 #ifdef __DEBUG
@@ -170,24 +171,8 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                 } else lut[i] = j;
             }
 
-            //An = A1>>g1;
-            //Bn = An + (B1-A1)*B1/(B1 + (B1-A1)*gb);
-            /*
-            An = A1h + (A1-A1h)*A1/(A1 + (A1-A1h)*ga);
-            for(i=0; i < hsz; i++){
-
-                if(i < A1) {
-                    if(i < A1h) lut1[i] = i;
-                    else lut1[i] = A1h + (i-A1h)*A1/(A1 + (i-A1h)*ga);
-                }
-                //else if(i >= A1 && i < B1) lut1[i] = An + (i-A1)*B1/(B1 + (i-A1)*gb) ;
-                //else lut1[i] = Bn + (i-B1);
-                else lut1[i] = An + (i-A1);
-            }*/
-
             An = Ah + (A-Ah)*A/(A + (A-Ah)*ga);
             for(i=0; i < 4096; i++){
-
                 if(i < A) {
                     if(i < Ah) lut1[i] = i;
                     else lut1[i] = Ah + (i-Ah)*A/(A + (i-Ah)*ga);
@@ -196,7 +181,6 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                 //else lut1[i] = Bn + (i-B1);
                 else lut1[i] = An + (i-A);
             }
-
         }
 
         for(i=0; i < sz4; i+=4) {
@@ -292,10 +276,11 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                 sz, cn, Y, hn->Hmin.New,  hn->Hmax.New, hn->SatTh, gHDR);
         //dprintf("GB[0] = %u GB[1] = %u GB[2] = %u GB[3] = %u GB[4] = %u \n", GB[0], GB[1], GB[2], GB[3], GB[4]);
         dprintf("Rgain = %d Ggain = %d Bgain = %d\n", hn->Rgain.New, 512,  hn->Bgain.New);
-        */
+
         dprintf("GR[0] = %u GR[1] = %u GR[2] = %u\n", GR[0], GR[1], GR[2]);
         dprintf("GB[0] = %u GB[1] = %u GB[2] = %u\n", GB[0], GB[1], GB[2]);
         dprintf("GN[0] = %d GN[1] = %d GN[2] = %d\n", GN[0], GN[1], GN[2]);
+        */
 #endif
         //White balance algorithm
 
@@ -337,9 +322,9 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         //AE algorithm
         //Change expouse
         if(FPShigh && IRcutClose && !down && !gHDR){
-            if(hn->Hmin.New > HISTTH && hn->Hmax.New > 2000) { // || downth < uphalf){
-                if(hn->Hmin.New > HISTTH*3) min = hn->Exp.Old>>1;
-                else min = hn->Exp.Old*HISTTH/hn->Hmin.New;
+            if(hn->Hmin.New > hn->HISTTH && hn->Hmax.New > 2000) { // || downth < uphalf){
+                if(hn->Hmin.New > hn->HISTTH*3) min = hn->Exp.Old>>1;
+                else min = hn->Exp.Old*hn->HISTTH/hn->Hmin.New;
                 //min = min < hn->Exp.Old*downth/uphalf ? min : hn->Exp.Old*downth/uphalf;
                 //Down expouse
                 if(gFlicker == VIDEO_NONE){
@@ -366,7 +351,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         }
         //Check Low light condition
         //First down fps
-        if ( FPShigh == 1 && IRcutClose == 1 && Y < 100 ) {
+        if ( FPShigh == 1 && IRcutClose == 1 && Y < 120 ) {
             frame_count += leave_frames;
             if (frame_count > 200) {
                 FPShigh = 0;
@@ -374,7 +359,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                 //if(DEBUG) dprintf("FPS DOWN : YN %d YO %d \n", hn->Y.New, hn->Y.Old);
             }
         }
-        if ( FPShigh == 0 && IRcutClose == 1 && Y > 180) {
+        if ( FPShigh == 0 && IRcutClose == 1 && Y > 200) {
             frame_count += leave_frames;
             if (frame_count > 200) {
                 FPShigh = 1;
@@ -385,7 +370,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         //Second open IR-cut
         if(gIRCut == ALG_IRCUT_AUTO){
             //Got to night mode
-            if ( FPShigh == 0 && IRcutClose == 1 && Y < 100) {
+            if ( FPShigh == 0 && IRcutClose == 1 && Y < 120) {
                 frame_count += leave_frames;
                 if (frame_count > 200) {
                     IRcutClose = 0;
@@ -394,7 +379,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                 }
             }
             //Come back to day mode
-            if ( FPShigh == 0 && IRcutClose == 0 && Y > 180) {
+            if ( FPShigh == 0 && IRcutClose == 0 && Y > 200) {
                 frame_count += leave_frames;
                 if (frame_count > 200) {
                     IRcutClose = 1;
@@ -434,7 +419,6 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                 else if(r1 >= min1  && r1 < max1) {
                     //vl1 = (r - min2)*st>>13;
                     vl1 = (lut1[r] - minn)*st1>>13;
-
                 }
                 else vl1 = 1023;
                 hn->RGB[0][i] = (vl0<<10) | (vl1 - vl0);
@@ -488,7 +472,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
 
             printf("A1 = %d B1 = %d Rgain = %d Bgain  = %d min1 = %d max = %d minn = %d maxn = %d st1 = %d\n",
                    A1, B1, hn->Rgain.New, hn->Bgain.New, min1, max1, minn, maxn, st1);
-            /*
+
             for(i=0; i < 512; i++){
                 if(i == min1) printf("min1\n");
                 else if(i == max1) printf("max1\n");
@@ -498,27 +482,26 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                 printf("%3d R %4d  %4d  G %4d  %4d  B %4d  %4d lut = %d lut1 = %d\n",
                        i, hn->RGB[0][i]>>10, hn->RGB[0][i]&1023, hn->RGB[1][i]>>10, hn->RGB[1][i]&1023, hn->RGB[2][i]>>10, hn->RGB[2][i]&1023, lut[i], lut1[i<<3]);
             }
-            */
         } else {
-
             //Change the offset
-            //hn->Offset.New = hn->Hmin.New;
-            hn->Offset.New = hn->Hmin.NewA;
+            if(hn->Hmin.NewA > OFF) hn->Offset.New = hn->Hmin.NewA - OFF;
+            else hn->Offset.New = hn->Hmin.NewA;
             //IFIF gain
             if(hn->Hmax.NewA) hn->GIFIF.New = ((hn->HmaxTh)<<9)/(hn->Hmax.NewA - hn->Offset.New);
-            //If not enough IFIF gain add rgb2rgb gain
 
+            //Check gain range
+            hn->GIFIF.New = hn->GIFIF.New > hn->GIFIF.Range.max ? hn->GIFIF.Range.max : hn->GIFIF.New;
+            hn->GIFIF.New = hn->GIFIF.New < hn->GIFIF.Range.min ? hn->GIFIF.Range.min : hn->GIFIF.New;
+
+            //If not enough IFIF gain add rgb2rgb gain
             if(hn->GIFIF.New > hn->GIFIF.Range.max){
                 hn->Grgb2rgb.New = (hn->GIFIF.New*256/hn->GIFIF.Range.max);
             } else {
                 hn->Grgb2rgb.New = 256;
             }
-
-            //Check gain range
-            hn->GIFIF.New = hn->GIFIF.New > hn->GIFIF.Range.max ? hn->GIFIF.Range.max : hn->GIFIF.New;
-            hn->GIFIF.New = hn->GIFIF.New < hn->GIFIF.Range.min ? hn->GIFIF.Range.min : hn->GIFIF.New;
             hn->Grgb2rgb.New = hn->Grgb2rgb.New > hn->Grgb2rgb.Range.max ? hn->Grgb2rgb.Range.max : hn->Grgb2rgb.New;
             hn->Grgb2rgb.New = hn->Grgb2rgb.New < hn->Grgb2rgb.Range.min ? hn->Grgb2rgb.Range.min : hn->Grgb2rgb.New;
+
 
         }
         hn->Y.Old = hn->Y.New;
@@ -547,9 +530,10 @@ void AF_SIG_process(int *afEnable)
     Int32 sz = w*h,  sz4 = sz*4;
     Int32 i, focus_val = 0;
     Uint16 *box = hn->box;
+    Int32 MAX_STEP = 220;
     int status;
     char zoomvalue[4];
-    int readsize, zoom, shift = 4;
+    int readsize, zoom, shift = 0;
     static int frames = 0, numframes = 0;
     static int zoomstep = 0;
 
@@ -575,7 +559,7 @@ void AF_SIG_process(int *afEnable)
         status = OSA_fileReadFile("/var/run/zoom", zoomvalue, sizeof(zoomvalue), (size_t*)&readsize);
 
         if(status!=OSA_SOK) {
-            //OSA_printf("AF: error read from file\n");
+            OSA_printf("AF: error read from file\n");
             status = 0;
             zoom = 0;
         } else {
@@ -591,13 +575,11 @@ void AF_SIG_process(int *afEnable)
                 zoomstep = zoom;
             }
             dir = zoomdir;
-            if (zoomstep >= 3) {
+            if (zoomstep) {
                 step = zoomchange;
-                AFMax = 0;
-                maxO = 0;
-                if (zoomstep > 10) zoomstep += 10;
-                else zoomstep *= 2;
-
+                //if (zoomstep > 10) zoomstep += 10;
+                //else zoomstep *= 2;
+                DRV_imgsMotorStep(1, dir, zoomstep>>1);
                 sprintf(zoomvalue, "%04d", 0);
                 status = OSA_fileWriteFile("/var/run/zoom", zoomvalue, sizeof(zoomvalue));
                 if(status!=OSA_SOK) {
@@ -607,39 +589,46 @@ void AF_SIG_process(int *afEnable)
         }
         //numframes = 0;
         if(step != zoomchange) step = autofocus;
+        AFMax = 0;
+        maxO = 0;
+        OSA_printf("step  = %d zoomstep = %d \n",step, zoomstep);
     }
-    numframes++;
     //step = coarse;
+    numframes++;
 
     switch(step) {
     case zoomchange:
-        stepcnt ++;
-        DRV_imgsMotorStep(1, dir, 1); // 2 is optimal step for AF
-        if(stepcnt > shift){
-
-            //maxO = 0;
-            if(focus_val > AFMax){
-                maxN = focus_val;
-                if(maxN < maxO){
-                    DRV_imgsMotorStep(1, !dir, 6);
-                    step = af_end;
-                    stepcnt = 0;
+        //if (!numframes) {
+        //    DRV_imgsMotorStep(1, dir, zoomstep>>1);
+        //    maxO = focus_val;
+        //} else {
+            stepcnt ++;
+            DRV_imgsMotorStep(1, dir, 1); // 2 is optimal step for AF
+            if(stepcnt > shift){
+                //maxO = 0;
+                if(focus_val > AFMax){
+                    maxN = focus_val;
+                    if(maxN < maxO){
+                        DRV_imgsMotorStep(1, !dir, 6);
+                        step = af_end;
+                        stepcnt = 0;
+                    }
+                    OSA_printf("zoomchange stepcnt = %d focus_val = %d maxN = %d maxO = %d focusdir = %d step = %d\n",
+                               stepcnt, focus_val, maxN, maxO, focusdir, step);
+                    maxO = maxN;
                 }
-                OSA_printf("zoomchange stepcnt = %d focus_val = %d maxN = %d maxO = %d focusdir = %d step = %d\n",
-                           stepcnt, focus_val, maxN, maxO, focusdir, step);
-                maxO = maxN;
             }
-        }
-        if ((stepcnt - shift) > 200) {
-            step = af_end;
-            stepcnt = 0;
-        }
-         break;
+            if ((stepcnt - shift) > MAX_STEP) {
+                step = af_end;
+                stepcnt = 0;
+            }
+        //}
+        break;
     case autofocus:
-        if (firststep < 20) {// set start position and stabilize video
-            if (firststep == 0) {// set start position
+        if (firststep < 20) { // set start position and stabilize video
+            if (firststep == 0) { // set start position
                 focusdir = 0;
-                DRV_imgsMotorStep(1, focusdir, 250);
+                DRV_imgsMotorStep(1, focusdir, MAX_STEP);
                 //if(!focusdir) {
                 //    DRV_imgsMotorStep(1, 1, maxstep-4);
                 //}
@@ -651,9 +640,8 @@ void AF_SIG_process(int *afEnable)
             stepcnt +=2;
             DRV_imgsMotorStep(1, !focusdir, 2); // 2 is optimal step for AF
             if(stepcnt > shift){
-
                 if(focus_val > AFMax) {  AFMax = focus_val; maxstep = stepcnt; }
-                if ((stepcnt - shift) > 200) {
+                if ((stepcnt - shift) > MAX_STEP) {
                     stepcnt = 0;
                     AFMax = AFMax*80/100;
                     maxO = 0;
@@ -669,9 +657,10 @@ void AF_SIG_process(int *afEnable)
         *afEnable = 0;
         stepcnt = 0;
         numframes = 0;
+        firststep = 0;
         DRV_imgsMotorStep(1, 0, 0); // turn off gpio
         break;
-     }
+    }
 
     frames++;
 }

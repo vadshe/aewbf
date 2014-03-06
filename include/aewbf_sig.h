@@ -11,7 +11,11 @@
 #define GY    0x96
 #define BY    0x1d
 #define ALG_SENSOR_BITS (1<<9)
-#define HISTORY 8
+#define HISTORY 30
+#define ZERO 176 //176 Sony IMX136 zero level
+#define OFF 30
+#define UP 700
+
 
 typedef struct ALG_AewbfObj {
     IAEWBF_InArgs   InArgs;
@@ -79,13 +83,13 @@ typedef struct IAEWBF_SIG_Obj {
     XDAS_UInt32 FPSmax;             //Maximum FPS
     XDAS_UInt32 FPScur;             //Current FPS
     XDAS_UInt32 RGB[3][512];        //Gamma tables for each color
+    XDAS_UInt32 HISTTH;             //Minimum offset for down expouse
     //Dynamic parametar
     int gAePriorityMode, gBWMode, gDayNight, gIRCut, defaultFPS, gFlicker;
     int IRcutClose; //IR-cut 1-close, 0 - open
     int FPShigh; //FPS 1-high, 0 - low
 } IAEWBF_SIG_Obj;
 
-#define ZERO 176 //176 Sony IMX136 zero level
 
 extern Int IAEWBF_SIG_alloc(const IALG_Params *algParams, IALG_Fxns **pf, IALG_MemRec memTab[]);
 
