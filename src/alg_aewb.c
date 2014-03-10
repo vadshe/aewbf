@@ -211,7 +211,7 @@ void *ALG_aewbCreate(ALG_AewbCreate *create)
   gALG_aewbObj.numEncodes		= create->numEncodes;
   gALG_aewbObj.afEnable         = create->afEnable;
 
-  OSA_printf("AEWB: sensor FPS = %d %d\n",create->sensorFps, create->numEncodes);
+  //OSA_printf("AEWB: sensor FPS = %d %d\n",create->sensorFps, create->numEncodes);
 
   if (gALG_aewbObj.ALTM == 1)
   {
@@ -469,12 +469,7 @@ void *ALG_aewbCreate(ALG_AewbCreate *create)
           return NULL;
       }
 
-      /* setup initial ipipe gains */
-      //ALG_aewbSetIpipeWb(&ipipe_awb_gain, gALG_aewbObj.DGainEnable, lowlight);
-      //ALG_aewbSetSensorDcsub(0);
-      //ALG_aewbSetSensorGain(sensorGain);
-      //TI_2A_SetEEValues(create->shiftValue);
-      return &gSIG_Obj;
+       return &gSIG_Obj;
   }
 
   return &gALG_aewbObj;
@@ -1345,7 +1340,7 @@ void SIG2AFunc(void *pAddr)
 
         if(gSIG_Obj.aewbType == ALG_AEWB_AE || gSIG_Obj.aewbType == ALG_AEWB_AEWB){
             IAEWBF_SIG.process((IAEWBF_Handle)gSIG_Obj.handle_aewbf, &gSIG_Obj.InArgs, &gSIG_Obj.OutArgs);
-            SIG2A_applySettings();
+            if(aewbFrames > 4) SIG2A_applySettings();
         //} else {
         //    gSIG_Obj.OutArgs.nextAe = gSIG_Obj.InArgs.curAe;
         }

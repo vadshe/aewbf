@@ -19,6 +19,7 @@ extern IAEWBF_Fxns IAEWBF_SIG_IALG;
 extern int gIRCut, gFlicker;
 int IRcutClose = 1; //IR-cut 1-open, 0 - close
 int FPShigh = 1; //FPS 1-high, 0 - low
+int GN[3] = { 256, 0, -256}, wbup = 0;
 extern int gHDR;
 extern int DEBUG;
 extern ALG_AewbfObj gSIG_Obj;
@@ -133,7 +134,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
     Uint32 hist[hsz], lut[hsz], lut1[hsz<<3];
     Uint32 upth = sz3/8, downth = sz3>>1,  mid, uphalf;
     static int frames = 0;
-    int GN[3], wbt = 0, sum;
+    int wbt = 0, sum;
 
     int A = 1024 - ZERO, B = 2944 - ZERO, g1 = 3, g2 = 6;
     int ga = (1<<g1)-1, gb = (1<<(g2-g1))-1;
@@ -142,7 +143,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
     int A1 = A>>3, B1 = B>>3, A1h = A1>>1, Ah = 0;
     int An, Bn;
 
-    GN[0] = 8; GN[1] = 0; GN[2] = -8;
+
     //gr = (1<<27)/hn->Rgain.New;
     //gb = (1<<27)/hn->Bgain.New;
 
@@ -321,7 +322,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
 
         //AE algorithm
         //Change expouse
-        if(FPShigh && IRcutClose && !down && !gHDR){
+        if(FPShigh && IRcutClose && !down && !gHDR && hn->Hmin.New){
             if(hn->Hmin.New > hn->HISTTH && hn->Hmax.New > 2000) { // || downth < uphalf){
                 if(hn->Hmin.New > hn->HISTTH*3) min = hn->Exp.Old>>1;
                 else min = hn->Exp.Old*hn->HISTTH/hn->Hmin.New;
@@ -487,7 +488,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             if(hn->Hmin.NewA > OFF) hn->Offset.New = hn->Hmin.NewA - OFF;
             else hn->Offset.New = hn->Hmin.NewA;
             //IFIF gain
-            if(hn->Hmax.NewA) hn->GIFIF.New = ((hn->HmaxTh)<<9)/(hn->Hmax.NewA - hn->Offset.New);
+            if(hn->Hmax.NewA - hn->Offset.New) hn->GIFIF.New = ((hn->HmaxTh)<<9)/(hn->Hmax.NewA - hn->Offset.New);
 
             //Check gain range
             hn->GIFIF.New = hn->GIFIF.New > hn->GIFIF.Range.max ? hn->GIFIF.Range.max : hn->GIFIF.New;
@@ -502,11 +503,13 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             hn->Grgb2rgb.New = hn->Grgb2rgb.New > hn->Grgb2rgb.Range.max ? hn->Grgb2rgb.Range.max : hn->Grgb2rgb.New;
             hn->Grgb2rgb.New = hn->Grgb2rgb.New < hn->Grgb2rgb.Range.min ? hn->Grgb2rgb.Range.min : hn->Grgb2rgb.New;
 
-
         }
         hn->Y.Old = hn->Y.New;
+        if(GN[0] > 2 && !wbup) { GN[0] /= 2; GN[2] /= 2; }
+        else if(GN[0] == 2  ) { wbup = 1; GN[0] *= 2; GN[2] *= 2;}
+        else if(GN[0] <  256 && wbup) { GN[0] *= 2; GN[2] *= 2; }
+        else if(GN[0] == 256) { wbup = 0; GN[0] /= 2; GN[2] /= 2;}
     }
-
     frames++;
     return(IAES_EOK);
 }
