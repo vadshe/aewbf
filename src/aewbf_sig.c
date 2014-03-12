@@ -19,7 +19,7 @@ extern IAEWBF_Fxns IAEWBF_SIG_IALG;
 extern int gIRCut, gFlicker;
 int IRcutClose = 1; //IR-cut 1-open, 0 - close
 int FPShigh = 1; //FPS 1-high, 0 - low
-int GN[3] = { 256, 0, -256}, wbup = 0;
+int GN[3] = { 16, 0, -16}, wbup = 0;
 extern int gHDR;
 extern int DEBUG;
 extern ALG_AewbfObj gSIG_Obj;
@@ -322,16 +322,14 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
 
         //AE algorithm
         //Change expouse
-        if(FPShigh && IRcutClose && !down && !gHDR && hn->Hmin.New){
-            if(hn->Hmin.New > hn->HISTTH && hn->Hmax.New > 2000) { // || downth < uphalf){
+        if (!down && !gHDR) {// && hn->Hmin.New FPShigh && IRcutClose &&){
+            if(hn->Hmin.New > hn->HISTTH) { // && hn->Hmax.New > 2000) { // || downth < uphalf){
                 if(hn->Hmin.New > hn->HISTTH*3) min = hn->Exp.Old>>1;
-                else min = hn->Exp.Old*hn->HISTTH/hn->Hmin.New;
-                //min = min < hn->Exp.Old*downth/uphalf ? min : hn->Exp.Old*downth/uphalf;
+                else min = hn->Exp.Old*(hn->HISTTH + hn->Hmin.New)/hn->Hmin.New>>1;
+                //else min = hn->Exp.Old*hn->HISTTH/hn->Hmin.New;
                 //Down expouse
                 if(gFlicker == VIDEO_NONE){
                     hn->Exp.New = min;
-                    //hn->Exp.New = hn->Exp.Old*100/hn->Hmin.New;
-                    //hn->Exp.New = hn->Exp.Old*downth/uphalf;
                 } else {
                     hn->Exp.New -= hn->Exp.Step;
                 }
@@ -340,7 +338,9 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             } else if (hn->Y.Diff > hn->Y.Th){
                 //Up expouse
                 if(gFlicker == VIDEO_NONE){
-                    hn->Exp.New = hn->Exp.Old*(100 + hn->Y.Th)/100;
+                    if(hn->Hmin.New) hn->Exp.New = hn->Exp.Old*(hn->HISTTH + hn->Hmin.New)/hn->Hmin.New>>1;
+                    //if(hn->Hmin.NewA < (hn->HISTTH>>1)) hn->Exp.New = hn->Exp.Old*(100 + hn->Y.Th)/100;
+                    //else hn->Exp.New = hn->Exp.Old*hn->HISTTH/hn->Hmin.NewA;
                     if(hn->Exp.New > hn->Exp.Range.max)  hn->Exp.New = hn->Exp.Range.max;
                 } else  {
                     hn->Exp.New += hn->Exp.Step;
@@ -352,7 +352,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         }
         //Check Low light condition
         //First down fps
-        if ( FPShigh == 1 && IRcutClose == 1 && Y < 120 ) {
+        if ( FPShigh == 1 && IRcutClose == 1 && Y < 100 ) {
             frame_count += leave_frames;
             if (frame_count > 200) {
                 FPShigh = 0;
@@ -360,7 +360,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                 //if(DEBUG) dprintf("FPS DOWN : YN %d YO %d \n", hn->Y.New, hn->Y.Old);
             }
         }
-        if ( FPShigh == 0 && IRcutClose == 1 && Y > 200) {
+        if ( FPShigh == 0 && IRcutClose == 1 && Y > 220) {
             frame_count += leave_frames;
             if (frame_count > 200) {
                 FPShigh = 1;
@@ -371,7 +371,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         //Second open IR-cut
         if(gIRCut == ALG_IRCUT_AUTO){
             //Got to night mode
-            if ( FPShigh == 0 && IRcutClose == 1 && Y < 120) {
+            if ( FPShigh == 0 && IRcutClose == 1 && Y < 100) {
                 frame_count += leave_frames;
                 if (frame_count > 200) {
                     IRcutClose = 0;
@@ -380,7 +380,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                 }
             }
             //Come back to day mode
-            if ( FPShigh == 0 && IRcutClose == 0 && Y > 200) {
+            if ( FPShigh == 0 && IRcutClose == 0 && Y > 220) {
                 frame_count += leave_frames;
                 if (frame_count > 200) {
                     IRcutClose = 1;
@@ -507,8 +507,8 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         hn->Y.Old = hn->Y.New;
         if(GN[0] > 2 && !wbup) { GN[0] /= 2; GN[2] /= 2; }
         else if(GN[0] == 2  ) { wbup = 1; GN[0] *= 2; GN[2] *= 2;}
-        else if(GN[0] <  256 && wbup) { GN[0] *= 2; GN[2] *= 2; }
-        else if(GN[0] == 256) { wbup = 0; GN[0] /= 2; GN[2] /= 2;}
+        else if(GN[0] <  16 && wbup) { GN[0] *= 2; GN[2] *= 2; }
+        else if(GN[0] == 16) { wbup = 0; GN[0] /= 2; GN[2] /= 2;}
     }
     frames++;
     return(IAES_EOK);
