@@ -11,10 +11,10 @@
 #define GY    0x96
 #define BY    0x1d
 #define ALG_SENSOR_BITS (1<<9)
-#define HISTORY 15
+#define HISTORY 30
 #define ZERO 176 //176 Sony IMX136 zero level
-#define OFF 30
-#define UP 700
+#define OFF 0 //30
+#define UP 200
 
 
 typedef struct ALG_AewbfObj {

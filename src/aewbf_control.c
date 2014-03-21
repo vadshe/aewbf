@@ -20,14 +20,46 @@ ALG_AewbfObj gSIG_Obj;
 extern DRV_IpipeObj gDRV_ipipeObj;    //For boxcar
 extern CSL_IpipeObj gCSL_ipipeHndl;   //For gamma and rgb2rgb
 extern int OSA_fileWriteFile(const char *fileName, const void *addr, size_t size);
+//extern short TI_2A_SetEEValues(int shift_val);
+//extern int DRV_ipipeSetEdgeEnhance(CSL_IpipeEdgeEnhanceConfig *config);
 
 extern int gAePriorityMode, gBWMode, gDayNight, gIRCut, defaultFPS, gFlicker;
 extern int IRcutClose, FPShigh;
 extern int gHDR;
-extern Uint32 gamma42[], gamma00520[], gamma_hdr011[], gamma_hdr01[], gamma01[], gamma005[], gamma003[];
+extern Uint32  gamma01[], gamma005[], gamma001[], SIG_YEE_TABLE[];
 extern Int32 leave_frames;
 
-int DEBUG = 1;
+int DEBUG = 1, raw = 0;
+
+short SIG_2A_SetEEValues(int shift_val) //shift=3 for 1080P/720P, shift=4 for D1
+{
+    CSL_IpipeEdgeEnhanceConfig config;
+
+    config.enable                   = TRUE;
+    config.haloReduceEnable         = FALSE;
+    config.mergeMethod              = CSL_IPIPE_YEE_EE_ES_MERGING_METHOD_ABSOLUTE_MAX;//CSL_IPIPE_YEE_EE_ES_MERGING_METHOD_SUMMATION; //
+    config.hpfShift                 = shift_val;
+    config.hpfCoeff[0][0]           = 48;
+    config.hpfCoeff[0][1]           = 12;
+    config.hpfCoeff[0][2]           = 1024-10;
+    config.hpfCoeff[1][0]           = 12;
+    config.hpfCoeff[1][1]           = 0;
+    config.hpfCoeff[1][2]           = 1024-6;
+    config.hpfCoeff[2][0]           = 1024-10;
+    config.hpfCoeff[2][1]           = 1024-6;
+    config.hpfCoeff[2][2]           = 1024-2;
+    config.lowerThres               = 32;//8; //changed based on Gang Comment
+    config.edgeSharpGain            = 0;
+    config.edgeSharpHpValLowThres   = 128;
+    config.edgeSharpHpValUpLimit    = 768;
+    config.edgeSharpGainGradient    = 32;
+    config.edgeSharpOffsetGradient  = 0;
+    config.table                    = SIG_YEE_TABLE;
+
+    DRV_ipipeSetEdgeEnhance(&config);
+
+    return 0;
+}
 
 
 void smooth_change( IAEWBF_Param *par, int fr)
@@ -85,9 +117,8 @@ void ALG_SIG_config(IALG_Handle handle)
         hn->FPScur = defaultFPS;
         hn->FPSmax = defaultFPS;
     }
-    //DRV_imgsSetFramerate(defaultFPS); //Max FPS frame rate
-    //DRV_imgsSetEshutter(hn->Exp.Range.max, 0); //Max expouse
-    hn->HISTTH = 60;
+
+    hn->HISTTH = 40;
 
     //Zoom in 0 position
     sprintf(zoomvalue, "%04d", 0);
@@ -95,23 +126,21 @@ void ALG_SIG_config(IALG_Handle handle)
         OSA_printf("AF: error write in file\n");
     }
 
-
-    //if(gHDR) ALG_aewbSetSensorDcsub(0);
-    //else ALG_aewbSetSensorDcsub(176); //176 Offset for SONY IMX136
-    ALG_aewbSetSensorDcsub(ZERO); //176
-    //DRV_imgsSetCompress(9, 10, 1, 6);
-    //DRV_imgsSetCompress(8, 10, 2, 5);
-    //DRV_imgsSetCompress(6, 12, 3, 6);
+    //if(raw) ALG_aewbSetSensorDcsub(0); //176
+    //else ALG_aewbSetSensorDcsub(ZERO);
+    if(raw) DRV_isifSetDcSub(0);
+    else DRV_isifSetDcSub(-ZERO);
+    SIG_2A_SetEEValues(3);
 
     //Config contrast and Brightness
     //DRV_ipipeSetYoffet((pParm->yuv_adj_brt-128));
     //DRV_ipipeSetContrastBrightness(pParm->yuv_adj_ctr, 0x0);
 
     //Config gamma correction tables
-
     dataG.tableSize = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SIZE_512;
     dataG.tableSrc  = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SELECT_RAM;
-    dataG.bypassR = 0;
+    if(raw) dataG.bypassR = 1;
+    else dataG.bypassR = 0;
     dataG.bypassG = dataG.bypassR;
     dataG.bypassB = dataG.bypassR;
     dataG.tableR = gamma005; //gamma005//gamma42; //gamma_hdr011; //gamma_hdr01; //gamma01; //gamma00520
@@ -131,7 +160,6 @@ void ALG_SIG_config(IALG_Handle handle)
         OSA_ERROR("Fail CSL_ipipeSetGammaConfig!!!\n");
 
     //Config RGB2RGB matrix
-
     rgb2rgb1.matrix[0][0] = 256;
     rgb2rgb1.matrix[0][1] = 0;
     rgb2rgb1.matrix[0][2] = 0;
@@ -160,58 +188,59 @@ void ALG_SIG_config(IALG_Handle handle)
     rgb2rgb2.matrix[2][1] = 0;
     rgb2rgb2.matrix[2][2] = 256;
 
-    if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9M034_720P") == 0) {
-        rgb2rgb2.matrix[0][0] = 427;
-        rgb2rgb2.matrix[0][1] = -105;
-        rgb2rgb2.matrix[0][2] = -66;
+    if(!raw){
+        if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9M034_720P") == 0) {
+            rgb2rgb2.matrix[0][0] = 427;
+            rgb2rgb2.matrix[0][1] = -105;
+            rgb2rgb2.matrix[0][2] = -66;
 
-        rgb2rgb2.matrix[1][0] = -99;
-        rgb2rgb2.matrix[1][1] = 422;
-        rgb2rgb2.matrix[1][2] = -67;
+            rgb2rgb2.matrix[1][0] = -99;
+            rgb2rgb2.matrix[1][1] = 422;
+            rgb2rgb2.matrix[1][2] = -67;
 
-        rgb2rgb2.matrix[2][0] = -8;
-        rgb2rgb2.matrix[2][1] = -78;
-        rgb2rgb2.matrix[2][2] = 342;
-    } else if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0) {
-        rgb2rgb2.matrix[0][0] = 380;
-        rgb2rgb2.matrix[0][1] = -59;
-        rgb2rgb2.matrix[0][2] = -66;
+            rgb2rgb2.matrix[2][0] = -8;
+            rgb2rgb2.matrix[2][1] = -78;
+            rgb2rgb2.matrix[2][2] = 342;
+        } else if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0) {
+            rgb2rgb2.matrix[0][0] = 380;
+            rgb2rgb2.matrix[0][1] = -59;
+            rgb2rgb2.matrix[0][2] = -66;
 
-        rgb2rgb2.matrix[1][0] = -89;
-        rgb2rgb2.matrix[1][1] = 402;
-        rgb2rgb2.matrix[1][2] = -57;
+            rgb2rgb2.matrix[1][0] = -89;
+            rgb2rgb2.matrix[1][1] = 402;
+            rgb2rgb2.matrix[1][2] = -57;
 
-        rgb2rgb2.matrix[2][0] = -8;
-        rgb2rgb2.matrix[2][1] = -98;
-        rgb2rgb2.matrix[2][2] = 362;
-    } else if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9P031_5MP") == 0) {
-        hn->HISTTH = 40; //Reduse threshold to remove nonliniarity
+            rgb2rgb2.matrix[2][0] = -8;
+            rgb2rgb2.matrix[2][1] = -98;
+            rgb2rgb2.matrix[2][2] = 362;
+        } else if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9P031_5MP") == 0) {
+            hn->HISTTH = 30; //Reduse threshold to remove nonliniarity
 
-        rgb2rgb2.matrix[0][0] = 380;
-        rgb2rgb2.matrix[0][1] = -59;
-        rgb2rgb2.matrix[0][2] = -66;
+            rgb2rgb2.matrix[0][0] = 380;
+            rgb2rgb2.matrix[0][1] = -59;
+            rgb2rgb2.matrix[0][2] = -66;
 
-        rgb2rgb2.matrix[1][0] = -89;
-        rgb2rgb2.matrix[1][1] = 402;
-        rgb2rgb2.matrix[1][2] = -57;
+            rgb2rgb2.matrix[1][0] = -89;
+            rgb2rgb2.matrix[1][1] = 402;
+            rgb2rgb2.matrix[1][2] = -57;
 
-        rgb2rgb2.matrix[2][0] = -8;
-        rgb2rgb2.matrix[2][1] = -168;
-        rgb2rgb2.matrix[2][2] = 432;
-    } else if(strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0 && !gHDR){
-        rgb2rgb2.matrix[0][0] = 360;
-        rgb2rgb2.matrix[0][1] = -153;
-        rgb2rgb2.matrix[0][2] = 49;
+            rgb2rgb2.matrix[2][0] = -8;
+            rgb2rgb2.matrix[2][1] = -168;
+            rgb2rgb2.matrix[2][2] = 432;
+        } else if(strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0){
+            rgb2rgb2.matrix[0][0] = 360;
+            rgb2rgb2.matrix[0][1] = -153;
+            rgb2rgb2.matrix[0][2] = 49;
 
-        rgb2rgb2.matrix[1][0] = -92;
-        rgb2rgb2.matrix[1][1] = 312;
-        rgb2rgb2.matrix[1][2] = 36;
+            rgb2rgb2.matrix[1][0] = -92;
+            rgb2rgb2.matrix[1][1] = 312;
+            rgb2rgb2.matrix[1][2] = 36;
 
-        rgb2rgb2.matrix[2][0] = 37;
-        rgb2rgb2.matrix[2][1] = -338;
-        rgb2rgb2.matrix[2][2] = 557;
+            rgb2rgb2.matrix[2][0] = 37;
+            rgb2rgb2.matrix[2][1] = -338;
+            rgb2rgb2.matrix[2][2] = 557;
+        }
     }
-
     rgb2rgb2.offset[0]    = 0;
     rgb2rgb2.offset[1]    = 0;
     rgb2rgb2.offset[2]    = 0;
@@ -221,13 +250,10 @@ void ALG_SIG_config(IALG_Handle handle)
     if(DRV_ipipeSetRgb2Rgb2(&rgb2rgb2) != CSL_SOK)
         OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
 
-
     //Config isif white balance gain
     DRV_isifSetDgain(512, hn->Rgain.New, hn->Bgain.New, 512, 0);
 
-
     //Config ipipe gains and offset
-
     ipipeWb.gainR  = hn->GIFIF.New;
     ipipeWb.gainGr = hn->GIFIF.New;
     ipipeWb.gainGb = hn->GIFIF.New;
@@ -365,7 +391,8 @@ void SIG2A_applySettings(void)
     //Seting Expouse
     if(hn->Exp.New != hn->Exp.Old) {
         smooth_change(&hn->Exp, fr);
-        DRV_imgsSetEshutter(hn->Exp.New, 0);
+        DRV_imgsSetEshutter(hn->Exp.Old, 0);
+        //hn->Exp.Old = hn->Exp.New;
     }
 
     if(gHDR){
@@ -388,54 +415,43 @@ void SIG2A_applySettings(void)
         if(hn->Rgain.New != hn->Rgain.Old || hn->Bgain.New != hn->Bgain.Old){
             smooth_change(&hn->Rgain, fr);
             smooth_change(&hn->Bgain, fr);
-            DRV_isifSetDgain(512 , hn->Rgain.New, hn->Bgain.New, 512, 0);
+            DRV_isifSetDgain(512 , hn->Rgain.Old, hn->Bgain.Old, 512, 0);
             //hn->Rgain.Old = hn->Rgain.New;
             //hn->Bgain.Old = hn->Bgain.New;
         }
+    }
 
-
+    if(!raw){
         if(hn->Offset.New != hn->Offset.Old) {
             smooth_change(&hn->Offset, fr);
-            DRV_ipipeSetWbOffset(-hn->Offset.New);
+            DRV_ipipeSetWbOffset(-hn->Offset.Old);
             //hn->Offset.Old = hn->Offset.New;
         }
 
-        //DRV_isifSetDgain(512, 512, 512, 512, 0);
-        //gain = hn->Gain.New - hn->RGBgain[hn->maxi];
-        //DRV_isifSetDgain(gain + hn->RGBgain[1] , gain + hn->RGBgain[0], gain + hn->RGBgain[2], gain + hn->RGBgain[1], 0);
-        //gain = hn->Gain.New - hn->RGBgain[hn->maxi];
-
-
-        //gain = (4000<<9)/(hn->Hmax[0] - hn->Hmin[0]);
         if(hn->GIFIF.New !=  hn->GIFIF.Old){
             smooth_change(&hn->GIFIF, fr);
-            ipipeWb.gainR  = hn->GIFIF.New;
-            ipipeWb.gainGr = hn->GIFIF.New;
-            ipipeWb.gainGb = hn->GIFIF.New;
-            ipipeWb.gainB  = hn->GIFIF.New;
+            ipipeWb.gainR  = hn->GIFIF.Old;
+            ipipeWb.gainGr = hn->GIFIF.Old;
+            ipipeWb.gainGb = hn->GIFIF.Old;
+            ipipeWb.gainB  = hn->GIFIF.Old;
             DRV_ipipeSetWb(&ipipeWb);
             //hn->GIFIF.Old = hn->GIFIF.New;
         }
 
-        //offset = hn->Hmin[0] > 2047 ? 2047 : hn->Hmin[0];
-        //OSA_printf("SIG2A_applySettings: ofset = %d gain = %d\n", -offset, gain);
-        //DRV_ipipeSetWbOffset(-offset);
-
-
         //Config RGB2RGB matrix for more gain
         if(hn->Grgb2rgb.New !=  hn->Grgb2rgb.Old){
             smooth_change(&hn->Grgb2rgb, fr);
-            rgb2rgb.matrix[0][0] = hn->Grgb2rgb.New; //hn->RGBgain[0]*hn->Grgb2rgb.New>>8; //hn->RGBgain[0]; //hn->Grgb2rgb.New;
+            rgb2rgb.matrix[0][0] = hn->Grgb2rgb.Old;
             rgb2rgb.matrix[0][1] = 0;
             rgb2rgb.matrix[0][2] = 0;
 
             rgb2rgb.matrix[1][0] = 0;
-            rgb2rgb.matrix[1][1] = hn->Grgb2rgb.New; //hn->RGBgain[1]*hn->Grgb2rgb.New>>8; //hn->RGBgain[1]; //hn->Grgb2rgb.New;
+            rgb2rgb.matrix[1][1] = hn->Grgb2rgb.Old;
             rgb2rgb.matrix[1][2] = 0;
 
             rgb2rgb.matrix[2][0] = 0;
             rgb2rgb.matrix[2][1] = 0;
-            rgb2rgb.matrix[2][2] = hn->Grgb2rgb.New; //hn->RGBgain[2]*hn->Grgb2rgb.New>>8; //hn->RGBgain[2]; //hn->Grgb2rgb.New;
+            rgb2rgb.matrix[2][2] = hn->Grgb2rgb.Old;
 
             rgb2rgb.offset[0]    = 0;
             rgb2rgb.offset[1]    = 0;
@@ -449,6 +465,7 @@ void SIG2A_applySettings(void)
             //hn->Grgb2rgb.Old = hn->Grgb2rgb.New;
         }
     }
+
     frames++;
 }
 
@@ -520,7 +537,7 @@ int SIG_2A_config(IALG_Handle handle)
     hn->Grgb2rgb.Old = 256;
     hn->Grgb2rgb.New = 256;
     hn->Grgb2rgb.Range.min = 1;
-    hn->Grgb2rgb.Range.max = 2047;
+    hn->Grgb2rgb.Range.max = 512;
 
     //Y setup
     hn->Y.Step = 1;
@@ -534,7 +551,7 @@ int SIG_2A_config(IALG_Handle handle)
     hn->Y.Diff = 0;
 
     hn->HmaxTh = 3200;
-    hn->SatTh = hn->w*hn->h/100;
+    hn->SatTh = hn->w*hn->h*3/100;
 
     hn->Hmax.HistC = 0;
     hn->Hmin.HistC = 0;
