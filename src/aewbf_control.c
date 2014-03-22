@@ -411,58 +411,58 @@ void SIG2A_applySettings(void)
                 OSA_ERROR("Fail CSL_ipipeSetGammaConfig!!!\n");
         }
     } else {
-        //ISIF gain seting
-        if(hn->Rgain.New != hn->Rgain.Old || hn->Bgain.New != hn->Bgain.Old){
-            smooth_change(&hn->Rgain, fr);
-            smooth_change(&hn->Bgain, fr);
-            DRV_isifSetDgain(512 , hn->Rgain.Old, hn->Bgain.Old, 512, 0);
-            //hn->Rgain.Old = hn->Rgain.New;
-            //hn->Bgain.Old = hn->Bgain.New;
-        }
-    }
+        if(!raw){
+            //ISIF gain seting
+            if(hn->Rgain.New != hn->Rgain.Old || hn->Bgain.New != hn->Bgain.Old){
+                smooth_change(&hn->Rgain, fr);
+                smooth_change(&hn->Bgain, fr);
+                DRV_isifSetDgain(512 , hn->Rgain.Old, hn->Bgain.Old, 512, 0);
+                //hn->Rgain.Old = hn->Rgain.New;
+                //hn->Bgain.Old = hn->Bgain.New;
+            }
 
-    if(!raw){
-        if(hn->Offset.New != hn->Offset.Old) {
-            smooth_change(&hn->Offset, fr);
-            DRV_ipipeSetWbOffset(-hn->Offset.Old);
-            //hn->Offset.Old = hn->Offset.New;
-        }
+            if(hn->Offset.New != hn->Offset.Old) {
+                smooth_change(&hn->Offset, fr);
+                DRV_ipipeSetWbOffset(-hn->Offset.Old);
+                //hn->Offset.Old = hn->Offset.New;
+            }
 
-        if(hn->GIFIF.New !=  hn->GIFIF.Old){
-            smooth_change(&hn->GIFIF, fr);
-            ipipeWb.gainR  = hn->GIFIF.Old;
-            ipipeWb.gainGr = hn->GIFIF.Old;
-            ipipeWb.gainGb = hn->GIFIF.Old;
-            ipipeWb.gainB  = hn->GIFIF.Old;
-            DRV_ipipeSetWb(&ipipeWb);
-            //hn->GIFIF.Old = hn->GIFIF.New;
-        }
+            if(hn->GIFIF.New !=  hn->GIFIF.Old){
+                smooth_change(&hn->GIFIF, fr);
+                ipipeWb.gainR  = hn->GIFIF.Old;
+                ipipeWb.gainGr = hn->GIFIF.Old;
+                ipipeWb.gainGb = hn->GIFIF.Old;
+                ipipeWb.gainB  = hn->GIFIF.Old;
+                DRV_ipipeSetWb(&ipipeWb);
+                //hn->GIFIF.Old = hn->GIFIF.New;
+            }
 
-        //Config RGB2RGB matrix for more gain
-        if(hn->Grgb2rgb.New !=  hn->Grgb2rgb.Old){
-            smooth_change(&hn->Grgb2rgb, fr);
-            rgb2rgb.matrix[0][0] = hn->Grgb2rgb.Old;
-            rgb2rgb.matrix[0][1] = 0;
-            rgb2rgb.matrix[0][2] = 0;
+            //Config RGB2RGB matrix for more gain
+            if(hn->Grgb2rgb.New !=  hn->Grgb2rgb.Old){
+                smooth_change(&hn->Grgb2rgb, fr);
+                rgb2rgb.matrix[0][0] = hn->Grgb2rgb.Old;
+                rgb2rgb.matrix[0][1] = 0;
+                rgb2rgb.matrix[0][2] = 0;
 
-            rgb2rgb.matrix[1][0] = 0;
-            rgb2rgb.matrix[1][1] = hn->Grgb2rgb.Old;
-            rgb2rgb.matrix[1][2] = 0;
+                rgb2rgb.matrix[1][0] = 0;
+                rgb2rgb.matrix[1][1] = hn->Grgb2rgb.Old;
+                rgb2rgb.matrix[1][2] = 0;
 
-            rgb2rgb.matrix[2][0] = 0;
-            rgb2rgb.matrix[2][1] = 0;
-            rgb2rgb.matrix[2][2] = hn->Grgb2rgb.Old;
+                rgb2rgb.matrix[2][0] = 0;
+                rgb2rgb.matrix[2][1] = 0;
+                rgb2rgb.matrix[2][2] = hn->Grgb2rgb.Old;
 
-            rgb2rgb.offset[0]    = 0;
-            rgb2rgb.offset[1]    = 0;
-            rgb2rgb.offset[2]    = 0;
+                rgb2rgb.offset[0]    = 0;
+                rgb2rgb.offset[1]    = 0;
+                rgb2rgb.offset[2]    = 0;
 
-            if(DRV_ipipeSetRgb2Rgb(&rgb2rgb) != CSL_SOK)
-                OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
-            //if(DRV_ipipeSetRgb2Rgb2(&rgb2rgb) != CSL_SOK)
-            //    OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
+                if(DRV_ipipeSetRgb2Rgb(&rgb2rgb) != CSL_SOK)
+                    OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
+                //if(DRV_ipipeSetRgb2Rgb2(&rgb2rgb) != CSL_SOK)
+                //    OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
 
-            //hn->Grgb2rgb.Old = hn->Grgb2rgb.New;
+                //hn->Grgb2rgb.Old = hn->Grgb2rgb.New;
+            }
         }
     }
 

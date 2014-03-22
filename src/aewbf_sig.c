@@ -135,7 +135,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
     Uint32 upth = sz3/7, mid, uphalf, len;
     static int frames = 0;
 
-    int A = 2048 - ZERO, B = 3840 - ZERO, g1 = 3, g2 = 6;
+    int A = 512 - ZERO, B = 1408 - ZERO, g1 = 2, g2 = 5;
     int ga = (1<<g1)-1, gb = (1<<(g2-g1))-1;
     int Ai = A, Bi = (((B - A)<<g1) + A);
     int A1 = A>>3, B1 = B>>3, A1h = A1>>1, Ah = 0;
@@ -188,17 +188,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             hist[r>>3]++;
             hist[g>>3]++;
             hist[b>>3]++;
-            /*
-            if(gHDR){
-                r = lut[r>>3];
-                g = lut[g>>3];
-                b = lut[b>>3];
-                for(j=0; j < ns; j++) {
-                    GB[j] += abs(g - (b*(hn->Bgain.New + GN[j])>>9));
-                    GR[j] += abs(g - (r*(hn->Rgain.New + GN[j])>>9));
-                }
-            } else {
-                */
+
             if(gHDR){
                 r = lut[r>>3];
                 g = lut[g>>3];
@@ -324,7 +314,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
 
         //AE algorithm
         //Change expouse
-        if (!down) { // && !gHDR) {
+        if (!down) {// && !gHDR) {
             if(hn->Hmin.New > hn->HISTTH) {
                 if(hn->Hmin.New > hn->HISTTH*2) hn->Exp.New = hn->Exp.Old>>1;
                 else hn->Exp.New = hn->Exp.Old*299/300;
@@ -419,7 +409,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
 
                 if(r1 < min1) vl1 = 0;
                 else if(r1 >= min1  && r1 < max1) {
-                    //vl1 = (r - min2)*st>>13;
+                    //vl1 = (r1 - min1)*st>>10;
                     vl1 = (lut1[r] - minn)*st1>>13;
                 }
                 else vl1 = 1023;
@@ -446,6 +436,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                 if(i < min1) vl1 = 0;
                 else if(i >= min1 && i < max1) {
                     vl1 = (lut1[i<<3] - minn)*st1>>13;
+                    //vl1 = (i - min1)*st>>10;
                 }
                 else vl1 = 1023;
                 hn->RGB[1][i] = (vl0<<10) | (vl1 - vl0);
@@ -464,7 +455,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
 
                 if(r1 < min1) vl1 = 0;
                 else if(r1 >= min1  && r1 < max1) {
-                    //vl1 = (r - min2)*st>>13;
+                    //vl1 = (r1 - min1)*st>>10;
                     vl1 = (lut1[r] - minn)*st1>>13;
                 }
                 else vl1 = 1023;
@@ -481,12 +472,10 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                 else if(i == A1) printf("A1\n");
                 else if(i == B1) printf("B1\n");
 
-                //printf("%3d R %4d  %4d  G %4d  %4d  B %4d  %4d lut = %d lut1 = %d\n",
-                //       i, hn->RGB[0][i]>>10, hn->RGB[0][i]&1023, hn->RGB[1][i]>>10, hn->RGB[1][i]&1023, hn->RGB[2][i]>>10, hn->RGB[2][i]&1023, lut[i], lut1[i<<3]);
+                printf("%3d R %4d  %4d  G %4d  %4d  B %4d  %4d lut = %d lut1 = %d\n",
+                       i, hn->RGB[0][i]>>10, hn->RGB[0][i]&1023, hn->RGB[1][i]>>10, hn->RGB[1][i]&1023, hn->RGB[2][i]>>10, hn->RGB[2][i]&1023, lut[i], lut1[i<<3]);
             }
-        } //else
-
-        {
+        } else {
             //Change the offset
             if(hn->Hmin.NewA > OFF) hn->Offset.New = hn->Hmin.NewA - OFF;
             else hn->Offset.New = 0;
