@@ -11,7 +11,7 @@
 #define GY    0x96
 #define BY    0x1d
 #define ALG_SENSOR_BITS (1<<9)
-#define HISTORY 30
+#define HISTORY 15
 #define ZERO 176 //176 Sony IMX136 zero level
 #define OFF 0 //30
 #define UP 200

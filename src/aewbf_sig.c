@@ -30,7 +30,7 @@ extern int OSA_fileReadFile(const char *fileName, void *addr, size_t readSize, s
 extern int OSA_fileWriteFile(const char *fileName, const void *addr, size_t size);
 extern void OSA_waitMsecs(Uint32 msecs);
 
-Int32  frame_count = 0, leave_frames = 5, down = 0;
+Int32  frame_count = 0, leave_frames = 5;//, down = 0;
 
 
 #define __DEBUG
@@ -120,22 +120,21 @@ Int IAEWBF_SIG_init(IALG_Handle handle,
 
 XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWBF_OutArgs *outArgs)
 {
-     IAEWBF_SIG_Obj *hn = (IAEWBF_SIG_Obj *)handle;
+    IAEWBF_SIG_Obj *hn = (IAEWBF_SIG_Obj *)handle;
 
     int i, j;
     Uint32 w = hn->w, h = hn->h, cn = 0;
     int sz = w*h,  sz4 = sz*4, sz3 = sz*3, sz2 = sz3>>1;
     Uint32 r, g, b;
-    Uint32  Y=0, Y1=0, ns = 3, GR[ns], GB[ns];
+    Uint32  Y=0, ns = 3, GR[ns], GB[ns];
     Uint16 *box = hn->box;
     Uint32 hsz = ALG_SENSOR_BITS;
-    Uint32 minr, minb, min, max;
-    //Uint32 fp = 512, sp = 2304, fg = 1, sg = 7;
+    Uint32 minr, minb, min, up, tmp;
     Uint32 hist[hsz], lut[hsz], lut1[hsz<<3];
-    Uint32 upth = sz3/7, mid, uphalf, len;
+    //Uint32 upth = sz3/7, mid, uphalf, len;
     static int frames = 0;
 
-    int A = 512 - ZERO, B = 1408 - ZERO, g1 = 2, g2 = 5;
+    int A = 2048 - ZERO, B = 3584 - ZERO, g1 = 2, g2 = 6;
     int ga = (1<<g1)-1, gb = (1<<(g2-g1))-1;
     int Ai = A, Bi = (((B - A)<<g1) + A);
     int A1 = A>>3, B1 = B>>3, A1h = A1>>1, Ah = 0;
@@ -182,8 +181,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             g = box[i+1]>>2;
             b = box[i  ]>>2;
 
-            Y1 = (117*b + 601*g + 306*r)>>10;
-            Y += Y1;
+            Y += ((117*b + 601*g + 306*r)>>10);
 
             hist[r>>3]++;
             hist[g>>3]++;
@@ -210,7 +208,6 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
 
         //Make integral histogram
         for(i=1; i < hsz; i++) hist[i] += hist[i-1];
-
         //Find min in color histogram
         for(i=0;  hist[i] < hn->SatTh; i++) ;
         hn->Hmin.New = i;
@@ -218,65 +215,29 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         for(i=hsz-1; (sz3 - hist[i]) < hn->SatTh; i--);
         hn->Hmax.New = i+1;
 
-        //Find threshould for WB, half of histogram
-        /*
-        sum = 0;
-        for(i=0; sum < sz2; i++) sum += hist[i];
-        wbt = lut[i];
-        printf("wbt = %d\n", wbt);
-        */
-
-        //Add more gain in night mode
-
-        if(!FPShigh && !IRcutClose){
-            //The middle of histogram
-            mid = (hn->Hmax.New - hn->Hmin.New)>>1;
-            //Check upper half
-            uphalf = sz3 - hist[mid];
-            //dprintf("hist[0] = %u hist[hsz-1] = %u min = %d mid = %d max = %d uphalf = %d upth = %d\n",
-            //        hist[0], hist[hsz-1], hn->Hmin.New,  mid, hn->Hmax.New, uphalf, upth);
-
-            while(uphalf < upth && hn->Hmax.New > 5){
-                hn->Hmax.New--;
-                mid = (hn->Hmax.New - hn->Hmin.New)>>1;
-                uphalf = sz3 - hist[mid];
-            }
-            //dprintf("min = %d mid = %d max = %d \n", hn->Hmin.New,  mid, hn->Hmax.New);
-        }
-
-        //Avaraging
+        //Averaging
         hn->Hmax.Avrg += hn->Hmax.New;
         hn->Hmax.Avrg -= hn->Hmax.Hist[hn->Hmax.HistC];
         hn->Hmax.Hist[hn->Hmax.HistC] = hn->Hmax.New;
         hn->Hmax.HistC = (hn->Hmax.HistC == (HISTORY - 1)) ? 0 : hn->Hmax.HistC + 1;
+        hn->Hmax.NewA = (hn->Hmax.Avrg<<3)/HISTORY;
 
         hn->Hmin.Avrg += hn->Hmin.New;
         hn->Hmin.Avrg -= hn->Hmin.Hist[hn->Hmin.HistC];
         hn->Hmin.Hist[hn->Hmin.HistC] = hn->Hmin.New;
         hn->Hmin.HistC = (hn->Hmin.HistC == (HISTORY - 1)) ? 0 : hn->Hmin.HistC + 1;
-
-
-        hn->Hmax.NewA = (hn->Hmax.Avrg<<3)/HISTORY;
         hn->Hmin.NewA = (hn->Hmin.Avrg<<3)/HISTORY;
+
+        hn->Y.Avrg += hn->Y.New;
+        hn->Y.Avrg -= hn->Y.Hist[hn->Y.HistC];
+        hn->Y.Hist[hn->Y.HistC] = hn->Y.New;
+        hn->Y.HistC = (hn->Y.HistC == (HISTORY - 1)) ? 0 : hn->Y.HistC + 1;
+        hn->Y.NewA = hn->Y.Avrg/HISTORY;
 
         hn->Hmax.New = hn->Hmax.New<<3;
         hn->Hmin.New = hn->Hmin.New<<3;
 
-
-#ifdef AE_DEBUG_PRINTS
-        /*
-        dprintf("sz = %u cn = %d Y = %u min = %u max= %u SatTh = %u gHDR = %d \n",
-                sz, cn, Y, hn->Hmin.New,  hn->Hmax.New, hn->SatTh, gHDR);
-        //dprintf("GB[0] = %u GB[1] = %u GB[2] = %u GB[3] = %u GB[4] = %u \n", GB[0], GB[1], GB[2], GB[3], GB[4]);
-        dprintf("Rgain = %d Ggain = %d Bgain = %d\n", hn->Rgain.New, 512,  hn->Bgain.New);
-
-        dprintf("GR[0] = %u GR[1] = %u GR[2] = %u\n", GR[0], GR[1], GR[2]);
-        dprintf("GB[0] = %u GB[1] = %u GB[2] = %u\n", GB[0], GB[1], GB[2]);
-        dprintf("GN[0] = %d GN[1] = %d GN[2] = %d\n", GN[0], GN[1], GN[2]);
-        */
-#endif
         //White balance algorithm
-
         min = GR[0]; minr = 0;
         for(j=1; j < ns; j++){
             if(GR[j] < min) { min = GR[j]; minr = j; }
@@ -300,52 +261,41 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         hn->Bgain.New = hn->Bgain.New > hn->Bgain.Range.max ? hn->Bgain.Range.max : hn->Bgain.New;
         hn->Bgain.New = hn->Bgain.New < hn->Bgain.Range.min ? hn->Bgain.Range.min : hn->Bgain.New;
 
-        //Check Y history of difference
-        if(down){
-            hn->Y.Diff = 0;
-            hn->Y.Max = Y;
-            hn->Y.Min = Y;
-            down--;
-        } else {
-            if(Y > hn->Y.Max) hn->Y.Max = Y;
-            if(Y < hn->Y.Min) hn->Y.Min = Y;
-            if(hn->Y.Max) hn->Y.Diff = (hn->Y.Max - hn->Y.Min)*100/hn->Y.Max;
-        }
+        if(Y > hn->Y.Max) hn->Y.Max = Y;
+        if(Y < hn->Y.Min) hn->Y.Min = Y;
+        if(hn->Y.Max) hn->Y.Diff = (hn->Y.Max - hn->Y.Min)*100/hn->Y.Max;
 
         //AE algorithm
         //Change expouse
-        if (!down) {// && !gHDR) {
-            if(hn->Hmin.New > hn->HISTTH) {
-                if(hn->Hmin.New > hn->HISTTH*2) hn->Exp.New = hn->Exp.Old>>1;
-                else hn->Exp.New = hn->Exp.Old*299/300;
-                //Down expouse
-                if(gFlicker == VIDEO_NONE){
-                    //hn->Exp.New = min;
-                } else {
-                    //hn->Exp.New -= hn->Exp.Step;
-                }
-                if(hn->Exp.New < hn->Exp.Step) hn->Exp.New = hn->Exp.Step;
-                down = 2;
-            } else if (hn->Y.Diff > hn->Y.Th && hn->Y.Min == Y){
-                //Up expouse
-                if(gFlicker == VIDEO_NONE){
-                    if(hn->Y.Diff > hn->Y.Th*2){
-                        hn->Exp.New = hn->Exp.Old*(100 + hn->Y.Th)/100;
-                    } else hn->Exp.New = hn->Exp.Old*300/299;
-                    if(hn->Exp.New > hn->Exp.Range.max)  hn->Exp.New = hn->Exp.Range.max;
-                } else  {
-                    //if(hn->Y.Diff > hn->Y.Th*2) hn->Exp.New += hn->Exp.Step;
-                    //if(hn->Exp.New > hn->Exp.Range.max)  hn->Exp.New -= hn->Exp.Step;
-                }
-                //if(DEBUG) dprintf("EXP UP : ExpN %d ExpO %d YN %d YO %d YDiff %d\n", hn->Exp.New, hn->Exp.Old, hn->Y.New, hn->Y.Old, hn->Y.Diff);
-                //if(DEBUG) dprintf("EXP UP : YN %d YO %d YDiff %d\n", hn->Y.New, hn->Y.Old, hn->Y.Diff);
+        if((hn->Hmin.New > hn->HISTTH) && (hn->Hmax.New > 3000)){
+            if(hn->Hmin.New > hn->HISTTH*3) hn->Exp.New = hn->Exp.Old>>1;
+            else hn->Exp.New = hn->Exp.Old*99/100;
+            //Down expouse
+            if(gFlicker == VIDEO_NONE){
+                //hn->Exp.New = min;
+            } else {
+                //hn->Exp.New -= hn->Exp.Step;
+            }
+            if(hn->Exp.New < hn->Exp.Step) hn->Exp.New = hn->Exp.Step;
+            hn->Y.Diff = 0;
+            hn->Y.Max = Y;
+            hn->Y.Min = Y;
+        } else if (hn->Y.New < hn->Y.Old) {
+            //Up expouse
+            if(gFlicker == VIDEO_NONE){
+                if(hn->Y.Old - hn->Y.New) hn->Exp.New = hn->Y.Old*hn->Exp.Old/(hn->Y.Old - hn->Y.New);
+                if(hn->Exp.New > hn->Exp.Range.max)  hn->Exp.New = hn->Exp.Range.max;
+            } else  {
+                //if(hn->Y.Diff > hn->Y.Th*2) hn->Exp.New += hn->Exp.Step;
+                //if(hn->Exp.New > hn->Exp.Range.max)  hn->Exp.New -= hn->Exp.Step;
             }
         }
+        //}
         //Check Low light condition
         //First down fps
         if ( FPShigh == 1 && IRcutClose == 1 && Y < 100 ) {
             frame_count += leave_frames;
-            if (frame_count > 200) {
+            if (frame_count > 300) {
                 FPShigh = 0;
                 frame_count = 0;
                 //if(DEBUG) dprintf("FPS DOWN : YN %d YO %d \n", hn->Y.New, hn->Y.Old);
@@ -353,7 +303,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         }
         if ( FPShigh == 0 && IRcutClose == 1 && Y > 220) {
             frame_count += leave_frames;
-            if (frame_count > 200) {
+            if (frame_count > 300) {
                 FPShigh = 1;
                 frame_count = 0;
                 //if(DEBUG) dprintf("FPS UP : YN %d YO %d \n", hn->Y.New, hn->Y.Old);
@@ -364,16 +314,16 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             //Got to night mode
             if ( FPShigh == 0 && IRcutClose == 1 && Y < 100) {
                 frame_count += leave_frames;
-                if (frame_count > 200) {
+                if (frame_count > 300) {
                     IRcutClose = 0;
                     frame_count = 0;
                     //if(DEBUG) dprintf("IR OPEN : YN %d YO %d \n", hn->Y.New, hn->Y.Old);
                 }
             }
             //Come back to day mode
-            if ( FPShigh == 0 && IRcutClose == 0 && Y > 220) {
+            if ( FPShigh == 0 && IRcutClose == 0 && Y > 240) {
                 frame_count += leave_frames;
-                if (frame_count > 200) {
+                if (frame_count > 300) {
                     IRcutClose = 1;
                     frame_count = 0;
                     //if(DEBUG) dprintf("IR CLOSE : YN %d YO %d \n", hn->Y.New, hn->Y.Old);
@@ -477,24 +427,22 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             }
         } else {
             //Change the offset
-            if(hn->Hmin.NewA > OFF) hn->Offset.New = hn->Hmin.NewA - OFF;
-            else hn->Offset.New = 0;
-            //IFIF gain
-            //len = (hn->Hmax.NewA - hn->Hmin.NewA)/10;
-            if(Y - hn->Offset.New) hn->GIFIF.New = ((hn->HmaxTh)<<7)/(Y - hn->Offset.New);
-            /*
-            if(Y < len && FPShigh && IRcutClose) {
-                if(Y - hn->Offset.New) hn->GIFIF.New = ((hn->HmaxTh)<<8)/(Y - hn->Offset.New);
-            } else {
-                if(hn->Hmax.NewA - hn->Offset.New) hn->GIFIF.New = ((hn->HmaxTh)<<9)/(hn->Hmax.NewA - hn->Offset.New);
-            }
-            */
+            hn->Offset.New = hn->Hmin.NewA;
+
+            //Change gain
+            if(hn->Y.NewA - hn->Offset.New) hn->GIFIF.New = ((hn->HmaxTh>>2)<<9)/(hn->Y.NewA - hn->Offset.New);
+            up = hn->Hmax.NewA*hn->GIFIF.New>>9;
+            //printf("up = %d hn->HmaxTh = %d hn->GIFIF.New = %d", up, hn->HmaxTh, hn->GIFIF.New);
+            if((up < hn->HmaxTh) && (hn->Y.NewA - hn->Offset.New))
+                hn->GIFIF.New = (((hn->HmaxTh*2 - up)>>2)<<9)/(hn->Y.NewA - hn->Offset.New);
+
             //If not enough IFIF gain add rgb2rgb gain
             if(hn->GIFIF.New > hn->GIFIF.Range.max){
                 hn->Grgb2rgb.New = (hn->GIFIF.New*256/hn->GIFIF.Range.max);
             } else {
                 hn->Grgb2rgb.New = 256;
             }
+
             //Check gain range
             hn->GIFIF.New = hn->GIFIF.New > hn->GIFIF.Range.max ? hn->GIFIF.Range.max : hn->GIFIF.New;
             hn->GIFIF.New = hn->GIFIF.New < hn->GIFIF.Range.min ? hn->GIFIF.Range.min : hn->GIFIF.New;

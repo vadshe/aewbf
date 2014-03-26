@@ -118,7 +118,7 @@ void ALG_SIG_config(IALG_Handle handle)
         hn->FPSmax = defaultFPS;
     }
 
-    hn->HISTTH = 40;
+    hn->HISTTH = 20;
 
     //Zoom in 0 position
     sprintf(zoomvalue, "%04d", 0);
@@ -130,7 +130,7 @@ void ALG_SIG_config(IALG_Handle handle)
     //else ALG_aewbSetSensorDcsub(ZERO);
     if(raw) DRV_isifSetDcSub(0);
     else DRV_isifSetDcSub(-ZERO);
-    SIG_2A_SetEEValues(3);
+    if(!raw) SIG_2A_SetEEValues(3);
 
     //Config contrast and Brightness
     //DRV_ipipeSetYoffet((pParm->yuv_adj_brt-128));
@@ -214,7 +214,7 @@ void ALG_SIG_config(IALG_Handle handle)
             rgb2rgb2.matrix[2][1] = -98;
             rgb2rgb2.matrix[2][2] = 362;
         } else if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9P031_5MP") == 0) {
-            hn->HISTTH = 30; //Reduse threshold to remove nonliniarity
+            //hn->HISTTH = 30; //Reduse threshold to remove nonliniarity
 
             rgb2rgb2.matrix[0][0] = 380;
             rgb2rgb2.matrix[0][1] = -59;
@@ -280,6 +280,7 @@ void print_debug(int frames, int leave_frames, IAEWBF_SIG_Obj *hn){
             dprintf("%6d   EXP          : Exp.New  = %6d Exp.Old = %6d Exp.Max = %6d\n", frames, hn->Exp.New, hn->Exp.Old, hn->Exp.Range.max);
             i++;
         }
+        /*
         if(hn->Offset.New != hn->Offset.Old || !all){
             dprintf("%6d   OFFSET       : Off.New = %4d Off.Old = %4d \n", frames, hn->Offset.New, hn->Offset.Old);
             i++;
@@ -297,8 +298,9 @@ void print_debug(int frames, int leave_frames, IAEWBF_SIG_Obj *hn){
             dprintf("%6d   GAIN RGB2RGB : RGB2gain.New = %4d RGB2gain.Old = %4d \n", frames, hn->Grgb2rgb.New, hn->Grgb2rgb.Old);
             i++;
         }
-        if(i ) dprintf("Y.New = %4d Y.Old = %4d Y.Min = %4d Y.Max = %4d Y.Diff = %4d Hmin = %4d Hmax = %4d HminA = %4d HmaxA = %4d\n",
-                                   hn->Y.New, hn->Y.Old, hn->Y.Min, hn->Y.Max, hn->Y.Diff, hn->Hmin.New, hn->Hmax.New, hn->Hmin.NewA, hn->Hmax.NewA);
+        */
+        if(i ) dprintf("Y.NewA = %4d Y.New = %4d Y.Old = %4d Y.Min = %4d Y.Max = %4d Y.Diff = %4d Hmin = %4d Hmax = %4d HminA = %4d HmaxA = %4d\n",
+                                   hn->Y.NewA, hn->Y.New, hn->Y.Old, hn->Y.Min, hn->Y.Max, hn->Y.Diff, hn->Hmin.New, hn->Hmax.New, hn->Hmin.NewA, hn->Hmax.NewA);
 
     }
 }
@@ -314,104 +316,107 @@ void SIG2A_applySettings(void)
 
     print_debug(frames, leave_frames, hn);
 
-    //IR-cut dynamic change
-    if(gIRCut != hn->gIRCut) {
-        if      (gIRCut == ALG_IRCUT_OPEN)  IRcutClose = 0;  // Open
-        else if (gIRCut == ALG_IRCUT_CLOSE) IRcutClose = 1;  // Close
-        hn->gIRCut = gIRCut;
-    }
-
-    //Black and color night mode dynamic change
-    if(gBWMode != hn->gBWMode) {
-        if (gIRCut == ALG_IRCUT_AUTO && !IRcutClose) {
-            DRV_imgsNDShutter(gIRCut, gBWMode);
-            //DRV_imgsSetBWmode(gBWMode);
+        //IR-cut dynamic change
+        if(gIRCut != hn->gIRCut) {
+            if      (gIRCut == ALG_IRCUT_OPEN)  IRcutClose = 0;  // Open
+            else if (gIRCut == ALG_IRCUT_CLOSE) IRcutClose = 1;  // Close
+            hn->gIRCut = gIRCut;
         }
-        hn->gBWMode = gBWMode;
-    }
 
-    //Change FPS
-    if (FPShigh != hn->FPShigh || gAePriorityMode != hn->gAePriorityMode || defaultFPS != hn->FPScur) {
-        if(defaultFPS != hn->FPScur){
-            hn->FPScur = defaultFPS;
-            hn->FPSmax = defaultFPS;
-        }
-        if(FPShigh == 0 ){
-            //Go to low FPS
-            if (gAePriorityMode == ALG_FPS_LOW) {
-                hn->FPScur = hn->FPSmax>>1;
-                DRV_imgsSetFramerate(hn->FPScur);
-                hn->Exp.Range.max = 1000000/hn->FPScur;
-                //hn->Exp.New  = (hn->Exp.Range.max/hn->Exp.Step)*hn->Exp.Step;
+        //BW and color night mode dynamic change
+        if(gBWMode != hn->gBWMode) {
+            if (gIRCut == ALG_IRCUT_AUTO && !IRcutClose) {
+                DRV_imgsNDShutter(gIRCut, gBWMode);
+                //DRV_imgsSetBWmode(gBWMode);
             }
-            else if (gAePriorityMode == ALG_FPS_5FPS){
-                hn->FPScur = 5;
-                DRV_imgsSetFramerate(hn->FPScur);
-                hn->Exp.Range.max = 200000;
-                //hn->Exp.New  = (hn->Exp.Range.max/hn->Exp.Step)*hn->Exp.Step;
+            hn->gBWMode = gBWMode;
+        }
+
+        //Change FPS
+        if (FPShigh != hn->FPShigh || gAePriorityMode != hn->gAePriorityMode || defaultFPS != hn->FPScur) {
+            if(defaultFPS != hn->FPScur){
+                hn->FPScur = defaultFPS;
+                hn->FPSmax = defaultFPS;
+            }
+            if(FPShigh == 0 ){
+                //Go to low FPS
+                if (gAePriorityMode == ALG_FPS_LOW) {
+                    hn->FPScur = hn->FPSmax>>1;
+                    DRV_imgsSetFramerate(hn->FPScur);
+                    hn->Exp.Range.max = 1000000/hn->FPScur;
+                    //hn->Exp.New  = (hn->Exp.Range.max/hn->Exp.Step)*hn->Exp.Step;
+                }
+                else if (gAePriorityMode == ALG_FPS_5FPS){
+                    hn->FPScur = 5;
+                    DRV_imgsSetFramerate(hn->FPScur);
+                    hn->Exp.Range.max = 200000;
+                    //hn->Exp.New  = (hn->Exp.Range.max/hn->Exp.Step)*hn->Exp.Step;
+                } else {
+                    hn->FPScur = hn->FPSmax;
+                    DRV_imgsSetFramerate(hn->FPScur);
+                    hn->Exp.Range.max = 1000000/hn->FPScur;
+                    //hn->Exp.New  = (hn->Exp.Range.max/hn->Exp.Step)*hn->Exp.Step;
+                }
             } else {
+                //Go to high FPS
                 hn->FPScur = hn->FPSmax;
                 DRV_imgsSetFramerate(hn->FPScur);
                 hn->Exp.Range.max = 1000000/hn->FPScur;
                 //hn->Exp.New  = (hn->Exp.Range.max/hn->Exp.Step)*hn->Exp.Step;
             }
+            hn->Exp.New  = (hn->Exp.Range.max/hn->Exp.Step)*hn->Exp.Step;
+            hn->Exp.Old = hn->Exp.New;
+            hn->FPShigh = FPShigh;
+            hn->gAePriorityMode = gAePriorityMode;
+            DRV_imgsSetEshutter(hn->Exp.Old, 0);
+            printf("defaultFPS = %d hn->Exp.New = %d hn->Exp.Range.max = %d hn->Exp.Step = %d\n",
+                   defaultFPS, hn->Exp.New, hn->Exp.Range.max, hn->Exp.Step);
+        }
+
+        //Change IR-cut
+        if (IRcutClose != hn->IRcutClose) {
+            DRV_imgsNDShutter(IRcutClose, gBWMode);
+            hn->IRcutClose = IRcutClose;
+        }
+
+        //Flicker
+        if(gFlicker != hn->gFlicker) {
+            if(gFlicker == VIDEO_NTSC) {		// 60 Hz flicker
+                hn->Exp.Step = 8333; 	// Exposure stepsize
+            } else if(gFlicker == VIDEO_PAL) {	// 50 Hz flicker
+                hn->Exp.Step = 10000; 	// Exposure stepsize
+            } else {
+                hn->Exp.Step = 1;
+            }
+            hn->Exp.Max = 1000000/hn->FPSmax;
+            hn->Exp.New = (hn->Exp.Old/hn->Exp.Step)*hn->Exp.Step;
+            hn->gFlicker = gFlicker;
+        }
+
+    if(!raw){
+        //Seting Expouse
+        if(hn->Exp.New != hn->Exp.Old) {
+            smooth_change(&hn->Exp, fr);
+            DRV_imgsSetEshutter(hn->Exp.Old, 0);
+            //hn->Exp.Old = hn->Exp.New;
+        }
+
+        if(gHDR){
+            //Config gamma correction tables
+            if(hn->Rgain.New != hn->Rgain.Old || hn->Bgain.New != hn->Bgain.Old){
+                dataG.tableSize = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SIZE_512;
+                dataG.tableSrc  = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SELECT_RAM;
+                dataG.bypassR = 0;
+                dataG.bypassG = dataG.bypassR;
+                dataG.bypassB = dataG.bypassR;
+                dataG.tableR = hn->RGB[0];
+                dataG.tableG = hn->RGB[1];
+                dataG.tableB = hn->RGB[2];
+                //Setup gamma tables
+                if(CSL_ipipeSetGammaConfig(&gCSL_ipipeHndl, &dataG) != CSL_SOK)
+                    OSA_ERROR("Fail CSL_ipipeSetGammaConfig!!!\n");
+            }
         } else {
-            //Go to high FPS
-            hn->FPScur = hn->FPSmax;
-            DRV_imgsSetFramerate(hn->FPScur);
-            hn->Exp.Range.max = 1000000/hn->FPScur;
-            //hn->Exp.New  = (hn->Exp.Range.max/hn->Exp.Step)*hn->Exp.Step;
-        }
-        hn->Exp.New  = (hn->Exp.Range.max/hn->Exp.Step)*hn->Exp.Step;
-        hn->FPShigh = FPShigh;
-        hn->gAePriorityMode = gAePriorityMode;
-        printf("defaultFPS = %d\n", defaultFPS);
-    }
-
-    //Change IR-cut
-    if (IRcutClose != hn->IRcutClose) {
-        DRV_imgsNDShutter(IRcutClose, gBWMode);
-        hn->IRcutClose = IRcutClose;
-    }
-
-    //Flicker
-    if(gFlicker != hn->gFlicker) {
-        if(gFlicker == VIDEO_NTSC) {		// 60 Hz flicker
-            hn->Exp.Step = 8333; 	// Exposure stepsize
-        } else if(gFlicker == VIDEO_PAL) {	// 50 Hz flicker
-            hn->Exp.Step = 10000; 	// Exposure stepsize
-        } else {
-            hn->Exp.Step = 1;
-        }
-        hn->Exp.Max = 1000000/hn->FPSmax;
-        hn->Exp.New = (hn->Exp.Old/hn->Exp.Step)*hn->Exp.Step;
-        hn->gFlicker = gFlicker;
-    }
-
-    //Seting Expouse
-    if(hn->Exp.New != hn->Exp.Old) {
-        smooth_change(&hn->Exp, fr);
-        DRV_imgsSetEshutter(hn->Exp.Old, 0);
-        //hn->Exp.Old = hn->Exp.New;
-    }
-
-    if(gHDR){
-        //Config gamma correction tables
-        if(hn->Rgain.New != hn->Rgain.Old || hn->Bgain.New != hn->Bgain.Old){
-            dataG.tableSize = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SIZE_512;
-            dataG.tableSrc  = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SELECT_RAM;
-            dataG.bypassR = 0;
-            dataG.bypassG = dataG.bypassR;
-            dataG.bypassB = dataG.bypassR;
-            dataG.tableR = hn->RGB[0];
-            dataG.tableG = hn->RGB[1];
-            dataG.tableB = hn->RGB[2];
-            //Setup gamma tables
-            if(CSL_ipipeSetGammaConfig(&gCSL_ipipeHndl, &dataG) != CSL_SOK)
-                OSA_ERROR("Fail CSL_ipipeSetGammaConfig!!!\n");
-        }
-    } else {
-        if(!raw){
             //ISIF gain seting
             if(hn->Rgain.New != hn->Rgain.Old || hn->Bgain.New != hn->Bgain.Old){
                 smooth_change(&hn->Rgain, fr);
@@ -465,7 +470,6 @@ void SIG2A_applySettings(void)
             }
         }
     }
-
     frames++;
 }
 
@@ -544,22 +548,26 @@ int SIG_2A_config(IALG_Handle handle)
     hn->Y.New = 1;
     hn->Y.Old = 1;
     hn->Y.Max = 1;
-    hn->Y.Min = 4095;
+    hn->Y.Min = 1;
     hn->Y.Range.min = 0;
     hn->Y.Range.max = 4095;
     hn->Y.Th = 10; //10%
     hn->Y.Diff = 0;
-
-    hn->HmaxTh = 3200;
-    hn->SatTh = hn->w*hn->h*3/100;
+    hn->Y.HistC = 0;
+    for(i=0; i < HISTORY; i++) hn->Y.Hist[i] = 0;
+    hn->Y.Avrg = 0;
 
     hn->Hmax.HistC = 0;
-    hn->Hmin.HistC = 0;
     for(i=0; i < HISTORY; i++) hn->Hmax.Hist[i] = 0;
     hn->Hmax.Avrg = 0;
 
+    hn->Hmin.HistC = 0;
     for(i=0; i < HISTORY; i++) hn->Hmin.Hist[i] = 0;
     hn->Hmin.Avrg = 0;
+
+    hn->HmaxTh = 4000;
+    hn->SatTh = hn->w*hn->h*3/100;
+
 
     //First value of dymanic parameters
     hn->gAePriorityMode = 4; //gAePriorityMode;
