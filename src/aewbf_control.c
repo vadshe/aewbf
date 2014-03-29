@@ -280,7 +280,7 @@ void print_debug(int frames, int leave_frames, IAEWBF_SIG_Obj *hn){
             dprintf("%6d   EXP          : Exp.New  = %6d Exp.Old = %6d Exp.Max = %6d\n", frames, hn->Exp.New, hn->Exp.Old, hn->Exp.Range.max);
             i++;
         }
-        /*
+
         if(hn->Offset.New != hn->Offset.Old || !all){
             dprintf("%6d   OFFSET       : Off.New = %4d Off.Old = %4d \n", frames, hn->Offset.New, hn->Offset.Old);
             i++;
@@ -298,7 +298,7 @@ void print_debug(int frames, int leave_frames, IAEWBF_SIG_Obj *hn){
             dprintf("%6d   GAIN RGB2RGB : RGB2gain.New = %4d RGB2gain.Old = %4d \n", frames, hn->Grgb2rgb.New, hn->Grgb2rgb.Old);
             i++;
         }
-        */
+
         if(i ) dprintf("Y.NewA = %4d Y.New = %4d Y.Old = %4d Y.Min = %4d Y.Max = %4d Y.Diff = %4d Hmin = %4d Hmax = %4d HminA = %4d HmaxA = %4d\n",
                                    hn->Y.NewA, hn->Y.New, hn->Y.Old, hn->Y.Min, hn->Y.Max, hn->Y.Diff, hn->Hmin.New, hn->Hmax.New, hn->Hmin.NewA, hn->Hmax.NewA);
 
@@ -401,7 +401,7 @@ void SIG2A_applySettings(void)
             //hn->Exp.Old = hn->Exp.New;
         }
 
-        if(gHDR){
+        if(0){ //gHDR
             //Config gamma correction tables
             if(hn->Rgain.New != hn->Rgain.Old || hn->Bgain.New != hn->Bgain.Old){
                 dataG.tableSize = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SIZE_512;
@@ -565,7 +565,7 @@ int SIG_2A_config(IALG_Handle handle)
     for(i=0; i < HISTORY; i++) hn->Hmin.Hist[i] = 0;
     hn->Hmin.Avrg = 0;
 
-    hn->HmaxTh = 4000;
+    hn->HmaxTh = 3500;
     hn->SatTh = hn->w*hn->h*3/100;
 
 
