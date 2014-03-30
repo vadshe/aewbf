@@ -122,14 +122,14 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
 {
     IAEWBF_SIG_Obj *hn = (IAEWBF_SIG_Obj *)handle;
 
-    int i, j, st;
+    int i, j, st, tmp=0;
     Uint32 w = hn->w, h = hn->h, cn = 0;
     int sz = w*h,  sz4 = sz*4, sz3 = sz*3, sz2 = sz3>>1;
     Uint32 r, g, b;
     Uint32  Y=0, ns = 3, GR[ns], GB[ns];
     Uint16 *box = hn->box;
     Uint32 hsz = ALG_SENSOR_BITS;
-    Uint32 minr, minb, min, up, tmp;
+    Uint32 minr, minb, min, up;
     Uint32 hist[hsz], lut[hsz], lut1[hsz<<3];
     //Uint32 upth = sz3/7, mid, uphalf, len;
     static int frames = 0;
@@ -337,15 +337,20 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         }
         */
         st = 500;
-        if(abs((st - hn->Y.New)*100/st) > 3){
-            //printf("hn->Y.New = %d   %d hn->Exp.New = %d  hn->Exp.Old = %d\n",
-            //       hn->Y.New, abs((st - hn->Y.New)*100/st), hn->Exp.New,  hn->Exp.Old);
-            if(hn->Y.New) hn->Exp.New = hn->Exp.Old*(hn->Y.New + st)/(hn->Y.New*2);
-            /*
-            if(hn->Y.New/st >= 2) hn->Exp.New = hn->Exp.Old>>1;
-            else hn->Exp.New = hn->Exp.Old*(3*st - hn->Y.New)/(st*2);
+        if(gFlicker == VIDEO_NONE){
+            //tmp = abs((st - hn->Y.New)*100/st);
+            if(hn->Y.New) tmp = hn->Y.New > st ? hn->Y.New*100/st : st*100/hn->Y.New;
+            if(tmp > 200){
+                //printf("hn->Y.New = %d   %d hn->Exp.New = %d  hn->Exp.Old = %d\n",
+                //       hn->Y.New, abs((st - hn->Y.New)*100/st), hn->Exp.New,  hn->Exp.Old);
+                //if(hn->Y.New) hn->Exp.New = hn->Exp.Old*(hn->Y.New + st)/(hn->Y.New*2);
+                if(hn->Y.New) hn->Exp.New = hn->Exp.Old*(hn->Y.New*2 + st)/(hn->Y.New*3);
+            } else if(tmp > 110 && tmp <= 200) {
+                if(hn->Y.New > st) hn->Exp.New = hn->Exp.Old*99/100;
+                else hn->Exp.New = hn->Exp.Old*100/99;
+
+            }
             if(hn->Exp.New > hn->Exp.Range.max)  hn->Exp.New = hn->Exp.Range.max;
-            */
         }
 
         /*
