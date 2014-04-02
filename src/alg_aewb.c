@@ -1333,16 +1333,14 @@ void TI2AFunc(void *pAddr)
 
 void SIG2AFunc(void *pAddr)
 {
-
-    Get_BoxCar(gSIG_Obj.handle_aewbf);
-
+    int leave_frames = 5;
     if ((Aew_ext_parameter.aew_enable == AEW_ENABLE) ) {
-
         if(gSIG_Obj.aewbType == ALG_AEWB_AE || gSIG_Obj.aewbType == ALG_AEWB_AEWB){
-            IAEWBF_SIG.process((IAEWBF_Handle)gSIG_Obj.handle_aewbf, &gSIG_Obj.InArgs, &gSIG_Obj.OutArgs);
+            if(!(aewbFrames%leave_frames)  && aewbFrames > 4){
+                Get_BoxCar(gSIG_Obj.handle_aewbf);
+                IAEWBF_SIG.process((IAEWBF_Handle)gSIG_Obj.handle_aewbf, &gSIG_Obj.InArgs, &gSIG_Obj.OutArgs);
+            }
             if(aewbFrames > 4) SIG2A_applySettings();
-        //} else {
-        //    gSIG_Obj.OutArgs.nextAe = gSIG_Obj.InArgs.curAe;
         }
     }
     aewbFrames++;

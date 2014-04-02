@@ -84,6 +84,7 @@ typedef struct IAEWBF_SIG_Obj {
     XDAS_UInt32 FPScur;             //Current FPS
     XDAS_UInt32 RGB[3][512];        //Gamma tables for each color
     XDAS_UInt32 HISTTH;             //Minimum offset for down expouse
+    XDAS_UInt32 YAE;                //Y value for AE algorithm
     //Dynamic parametar
     int gAePriorityMode, gBWMode, gDayNight, gIRCut, defaultFPS, gFlicker;
     int IRcutClose; //IR-cut 1-close, 0 - open

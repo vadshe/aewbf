@@ -32,6 +32,12 @@ extern void OSA_waitMsecs(Uint32 msecs);
 
 Int32  frame_count = 0, leave_frames = 5, exp_on = 1, history = 0;
 
+//For HDR mode
+int A = 256 - ZERO, B = 2240 - ZERO, g1 = 2, g2 = 5;
+Uint32 lut[ALG_SENSOR_BITS], lut1[ALG_SENSOR_BITS<<3];
+extern Uint32 gm003[], gm005[];
+
+
 
 #define __DEBUG
 #ifdef __DEBUG
@@ -130,79 +136,190 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
     Uint16 *box = hn->box;
     Uint32 hsz = ALG_SENSOR_BITS;
     Uint32 minr, minb, min, up;
-    Uint32 hist[hsz], lut[hsz], lut1[hsz<<3];
+    Uint32 hist[hsz], rgb[3][hsz];
     //Uint32 upth = sz3/7, mid, uphalf, len;
     static int frames = 0;
 
-    int A = 128 - ZERO, B = 4192 - ZERO, g1 = 2, g2 = 5;
+    //HDR mode
     int ga = (1<<g1)-1, gb = (1<<(g2-g1))-1;
     int Ai = A, Bi = (((B - A)<<g1) + A);
     int A1 = A>>3, B1 = B>>3, A1h = A1>>1, Ah = 0;
     int An, Bn;
+    int sum, rgb_min[3], rgb_max[3];
 
-     if(!(frames%leave_frames) && frames > 5){
-        //Clear histogram
-        memset(hist, 0, sizeof(Uint32)*hsz);
-        for(j=0; j < ns; j++) { GR[j] = 0; GB[j] = 0; }
+    //if(!(frames%leave_frames)  && frames > 5){
 
-        if(0){ //gHDR
-            //Make LUTs
-            /*
-            for(i=0; i < hsz; i++){
-                if(i > A1){
-                    if(i > B1) lut[i] = ((i-B1)<<g2) + Bi;
-                    else lut[i] = ((i-A1)<<g1) + Ai;
-                } else lut[i] = i;
-            }
-            */
-            for(i=0; i < hsz; i++){
-                j = i<<3;
-                if(j > A){
-                    if(j > B) lut[i] = ((j-B)<<g2) + Bi;
-                    else lut[i] = ((j-A)<<g1) + Ai;
-                } else lut[i] = j;
-            }
+    //Clear histogram
+    for(j=0; j < ns; j++) { GR[j] = 0; GB[j] = 0; }
 
-            An = Ah + (A-Ah)*A/(A + (A-Ah)*ga);
-            for(i=0; i < 4096; i++){
-                if(i < A) {
-                    if(i < Ah) lut1[i] = i;
-                    else lut1[i] = Ah + (i-Ah)*A/(A + (i-Ah)*ga);
-                }
-                //else if(i >= A1 && i < B1) lut1[i] = An + (i-A1)*B1/(B1 + (i-A1)*gb) ;
-                //else lut1[i] = Bn + (i-B1);
-                else lut1[i] = An + (i-A);
-            }
-        }
+    if(gHDR){
+        memset(rgb[0], 0, sizeof(Uint32)*hsz);
+        memset(rgb[1], 0, sizeof(Uint32)*hsz);
+        memset(rgb[2], 0, sizeof(Uint32)*hsz);
 
         for(i=0; i < sz4; i+=4) {
             //AE and WB
+            r = box[i+2]>>5;
+            g = box[i+1]>>5;
+            b = box[i  ]>>5;
+
+            rgb[0][r]++;
+            rgb[1][g]++;
+            rgb[2][b]++;
+
+            r = lut[r];
+            g = lut[g];
+            b = lut[b];
+            for(j=0; j < ns; j++) {
+                GB[j] += abs(g - (b*(hn->Bgain.New + GN[j])>>9));
+                GR[j] += abs(g - (r*(hn->Rgain.New + GN[j])>>9));
+            }
+        }
+
+        //White balance algorithm
+        min = GR[0]; minr = 0;
+        for(j=1; j < ns; j++){
+            if(GR[j] < min) { min = GR[j]; minr = j; }
+        }
+        min = GB[0]; minb = 0;
+        for(j=1; j < ns; j++){
+            if(GB[j] < min) { min = GB[j]; minb = j; }
+        }
+        if(minr != 1){
+            hn->Rgain.New = hn->Rgain.New + GN[minr];
+        }
+        if(minb != 1){
+            hn->Bgain.New = hn->Bgain.New + GN[minb];
+        }
+
+
+        //Find min and max of each color
+        for(j=0; j < 3; j++){
+            sum = 0;
+            for(i=0;  sum < hn->SatTh; i++) sum += rgb[j][i];
+            rgb_min[j] = i;
+            sum = 0;
+            for(i=hsz-1;  sum < hn->SatTh; i--) sum += rgb[j][i];
+            rgb_max[j] = i;
+        }
+
+        //Make gamma table for each color
+        int vl0, vl1, st[3], st1, min_g[3], max_g[3];
+        int min1, max1, min2, minn, maxn;
+
+        //min1 = (hn->Hmin.New<<6)/hn->Rgain.New;
+        //max1 = (hn->Hmax.New<<6)/hn->Rgain.New;
+        //min1 = hn->Hmin.New>>3;
+        //max1 = hn->Hmax.New>>3;
+
+        //Calculate new min
+        for(j=0; j < 3; j++){
+            if(j != 1){
+                if(j == 0) r = lut[rgb_min[j]]*hn->Rgain.New>>9;
+                if(j == 2) r = lut[rgb_min[j]]*hn->Bgain.New>>9;
+                if(r > Ai){
+                    if(r > Bi) r = ((r-Bi)>>g2) + Bi;
+                    else r = ((r-Ai)>>g1) + Ai;
+                }
+                min_g[j] = r >>3;
+            } else {
+                min_g[j] = rgb_min[j];
+            }
+        }
+        //Calculate new max
+        for(j=0; j < 3; j++){
+            if(j != 1){
+                if(j == 0) r = lut[rgb_max[j]]*hn->Rgain.New>>9;
+                if(j == 2) r = lut[rgb_max[j]]*hn->Bgain.New>>9;
+                if(r > Ai){
+                    if(r > Bi) r = ((r-Bi)>>g2) + Bi;
+                    else r = ((r-Ai)>>g1) + Ai;
+                }
+                max_g[j] = r >>3;
+            } else {
+                max_g[j] = rgb_max[j];
+            }
+        }
+
+        for(j=0; j < 3; j++) {
+            if(max_g[j] - min_g[j]) st[j] = (1<<20)/(max_g[j] - min_g[j]);
+        }
+
+        min2 = min1<<3;
+        minn = lut1[min1<<3];
+        maxn = lut1[max1<<3];
+        //minn2 = lut1[min1<<3];
+        st1 = (1<<23)/(maxn - minn);
+
+        printf("A1 = %d B1 = %d Rgain = %d Bgain  = %d\n", A1, B1, hn->Rgain.New, hn->Bgain.New);
+        printf("R rgb_min = %d rgb_max = %d min_g = %d max_g = %d st = %d\n", rgb_min[0], rgb_max[0], min_g[0], max_g[0], st[0]);
+        printf("G rgb_min = %d rgb_max = %d min_g = %d max_g = %d st = %d\n", rgb_min[1], rgb_max[1], min_g[1], max_g[1], st[1]);
+        printf("B rgb_min = %d rgb_max = %d min_g = %d max_g = %d st = %d\n", rgb_min[2], rgb_max[2], min_g[2], max_g[2], st[2]);
+        //Color gamma table
+        for(j=0; j < 3; j++){
+            vl0 = 0;
+            for(i=0; i < hsz; i++){
+                if(j != 1){
+                    if(j == 0) r = lut[i]*hn->Rgain.New>>9;
+                    if(j == 2) r = lut[i]*hn->Bgain.New>>9;
+                    if(r > Ai){
+                        if(r > Bi) r = ((r-Bi)>>g2) + Bi;
+                        else r = ((r-Ai)>>g1) + Ai;
+                    }
+                    r >>= 3;
+                } else {
+                    r = i;
+                }
+
+                if(i < rgb_min[j]) vl1 = 0;
+                else if(i >= rgb_min[j]  && i < rgb_max[j]) {
+                    vl1 = gm005[(r - min_g[j])*st[j]>>11];
+                    //vl1 = (r - min_g[j])*st[j]>>10;
+                    //vl1 = (lut1[r] - minn)*st1>>13;
+                }
+                else vl1 = 1023;
+                hn->RGB[j][i] = (vl0<<10) | (vl1 - vl0);
+                vl0 = vl1;
+            }
+        }
+
+        /*
+             for(i=0; i < 512; i++){
+                 if(i == min1) printf("min1\n");
+                 else if(i == max1) printf("max1\n");
+                 else if(i == A1) printf("A1\n");
+                 else if(i == B1) printf("B1\n");
+
+                 printf("%3d R %4d  %4d  G %4d  %4d  B %4d  %4d lut = %d lut1 = %d\n",
+                        i, hn->RGB[0][i]>>10, hn->RGB[0][i]&1023, hn->RGB[1][i]>>10, hn->RGB[1][i]&1023, hn->RGB[2][i]>>10, hn->RGB[2][i]&1023, lut[i], lut1[i<<3]);
+             }
+             */
+    } else {
+        memset(hist, 0, sizeof(Uint32)*hsz);
+        printf("sz = %d hsz = %d\n", sz, hsz);
+
+        for(i=0; i < sz4; i+=4) {
+            //AE and WB
+            //printf(" %3d %3d r = %d g = %d b = %d\n", (i>>2)/w, (i>>2)%w, box[i+2], box[i+1], box[i  ]);
             r = box[i+2]>>2;
             g = box[i+1]>>2;
             b = box[i  ]>>2;
 
-            Y += ((117*b + 601*g + 306*r)>>10);
+            //if(r < 4096 && b < 4096 && g < 4096){
+                Y += ((117*b + 601*g + 306*r)>>10);
 
-            hist[r>>3]++;
-            hist[g>>3]++;
-            hist[b>>3]++;
+                hist[r>>3]++;
+                hist[g>>3]++;
+                hist[b>>3]++;
 
-            if(0){ //gHDR
-                r = lut[r>>3];
-                g = lut[g>>3];
-                b = lut[b>>3];
-                for(j=0; j < ns; j++) {
-                    GB[j] += abs(g - (b*(hn->Bgain.New + GN[j])>>9));
-                    GR[j] += abs(g - (r*(hn->Rgain.New + GN[j])>>9));
-                }
-            } else {
                 for(j=0; j < ns; j++) {
                     GB[j] += abs(g - (b*(512 + GN[j])>>9));
                     GR[j] += abs(g - (r*(512 + GN[j])>>9));
                 }
-            }
+            //}
         }
 
+        printf("Y = %d\n", Y);
         Y = Y/sz;
         hn->Y.New = Y;
 
@@ -214,6 +331,8 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         //Find max in color histogram
         for(i=hsz-1; (sz3 - hist[i]) < hn->SatTh; i--);
         hn->Hmax.New = i+1;
+
+        printf("hn->Hmin.New = %d hn->Hmax.New = %d\n", hn->Hmin.New, hn->Hmax.New);
 
         //Averaging
         history++;
@@ -237,6 +356,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
 
         hn->Hmax.New = hn->Hmax.New<<3;
         hn->Hmin.New = hn->Hmin.New<<3;
+        printf("hn->Hmin.NewA = %d hn->Hmax.NewA = %d\n", hn->Hmin.NewA, hn->Hmax.NewA);
 
         //White balance algorithm
         min = GR[0]; minr = 0;
@@ -249,11 +369,9 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         }
         if(minr != 1){
             hn->Rgain.New = hn->Rgain.New + GN[minr];
-            //if(DEBUG) dprintf("WB R : RgN %d RgO %d\n", hn->Rgain.New, hn->Rgain.Old);
         }
         if(minb != 1){
             hn->Bgain.New = hn->Bgain.New + GN[minb];
-            //if(DEBUG) dprintf("WB B : BgN %d BgO %d\n", hn->Bgain.New, hn->Bgain.Old);
         }
 
         //Check range
@@ -261,119 +379,56 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         hn->Rgain.New = hn->Rgain.New < hn->Rgain.Range.min ? hn->Rgain.Range.min : hn->Rgain.New;
         hn->Bgain.New = hn->Bgain.New > hn->Bgain.Range.max ? hn->Bgain.Range.max : hn->Bgain.New;
         hn->Bgain.New = hn->Bgain.New < hn->Bgain.Range.min ? hn->Bgain.Range.min : hn->Bgain.New;
-        /*
-        //Check Y history of difference
-        if(down){
-            hn->Y.Diff = 0;
-            hn->Y.Max = Y;
-            hn->Y.Min = Y;
-            down--;
-        } else {
-            if(Y > hn->Y.Max) hn->Y.Max = Y;
-            if(Y < hn->Y.Min) hn->Y.Min = Y;
-            if(hn->Y.Max) hn->Y.Diff = (hn->Y.Max - hn->Y.Min)*100/hn->Y.Max;
-        }
 
-        //AE algorithm
-        //Change expouse
-        if (!down) {// && !gHDR) {
-            if(hn->Hmin.New > hn->HISTTH && hn->Hmax.New > 3000) {
-                if(hn->Hmin.New > hn->HISTTH*2) hn->Exp.New = hn->Exp.Old>>1;
-                else hn->Exp.New = hn->Exp.Old*99/100;
-                //Down expouse
-                if(gFlicker == VIDEO_NONE){
-                    //hn->Exp.New = min;
-                } else {
-                    //hn->Exp.New -= hn->Exp.Step;
-                }
-                if(hn->Exp.New < hn->Exp.Step) hn->Exp.New = hn->Exp.Step;
-                down = 2;
-            } else if (hn->Y.Diff > hn->Y.Th && hn->Y.Min == Y){
-                //Up expouse
-                if(gFlicker == VIDEO_NONE){
-                    if(hn->Y.Diff > hn->Y.Th*2){
-                        hn->Exp.New = hn->Exp.Old*(100 + hn->Y.Th)/100;
-                    } else hn->Exp.New = hn->Exp.Old*100/99;
-                    if(hn->Exp.New > hn->Exp.Range.max)  hn->Exp.New = hn->Exp.Range.max;
-                } else  {
-                    //if(hn->Y.Diff > hn->Y.Th*2) hn->Exp.New += hn->Exp.Step;
-                    //if(hn->Exp.New > hn->Exp.Range.max)  hn->Exp.New -= hn->Exp.Step;
-                }
-            }
-        }
-        */
-        /*
-        if(Y > hn->Y.Max) hn->Y.Max = Y;
-        if(Y < hn->Y.Min) hn->Y.Min = Y;
-        if(hn->Y.Max) hn->Y.Diff = (hn->Y.Max - hn->Y.Min)*100/hn->Y.Max;
-        down++;
+        printf("hn->Bgain.New = %d hn->Rgain.New = %d\n", hn->Bgain.New, hn->Rgain.New);
 
-        //AE algorithm
-        //Change expouse
-
-        if((hn->Hmin.New > hn->HISTTH) && (hn->Hmax.New > 3000)){
-            if(hn->Hmin.New > hn->HISTTH*3) hn->Exp.New = hn->Exp.Old*80/100;
-            else hn->Exp.New = hn->Exp.Old*99/100;
-            //Down expouse
-            if(gFlicker == VIDEO_NONE){
-                //hn->Exp.New = min;
-            } else {
-                //hn->Exp.New -= hn->Exp.Step;
-            }
-            if(hn->Exp.New < hn->Exp.Step) hn->Exp.New = hn->Exp.Step;
-            hn->Y.Diff = 0;
-            hn->Y.Max = Y;
-            hn->Y.Min = Y;
-            down = 0;
-        } else if (hn->Y.New < hn->Y.Old ) {
-            //Up expouse
-            if(gFlicker == VIDEO_NONE){
-                if(hn->Y.Old - hn->Y.New) hn->Exp.New = hn->Y.Old*hn->Exp.Old/(hn->Y.Old - hn->Y.New);
-                if(hn->Exp.New > hn->Exp.Range.max)  hn->Exp.New = hn->Exp.Range.max;
-            } else  {
-                //if(hn->Y.Diff > hn->Y.Th*2) hn->Exp.New += hn->Exp.Step;
-                //if(hn->Exp.New > hn->Exp.Range.max)  hn->Exp.New -= hn->Exp.Step;
-            }
-        }
-        */
-        st = 500;
+        st = hn->YAE;
         if(gFlicker == VIDEO_NONE){
-            //tmp = abs((st - hn->Y.New)*100/st);
             if(hn->Y.New) tmp = hn->Y.New > st ? hn->Y.New*100/st : st*100/hn->Y.New;
             if(tmp > 200){
-                //printf("hn->Y.New = %d   %d hn->Exp.New = %d  hn->Exp.Old = %d\n",
-                //       hn->Y.New, abs((st - hn->Y.New)*100/st), hn->Exp.New,  hn->Exp.Old);
                 //if(hn->Y.New) hn->Exp.New = hn->Exp.Old*(hn->Y.New + st)/(hn->Y.New*2);
                 if(hn->Y.New) hn->Exp.New = hn->Exp.Old*(hn->Y.New*2 + st)/(hn->Y.New*3);
             } else if(tmp > 110 && tmp <= 200) {
                 if(hn->Y.New > st) hn->Exp.New = hn->Exp.Old*99/100;
                 else hn->Exp.New = hn->Exp.Old*100/99;
-
             }
             if(hn->Exp.New > hn->Exp.Range.max)  hn->Exp.New = hn->Exp.Range.max;
         }
 
+        printf("hn->Exp.New = %d \n", hn->Exp.New);
+
+        //Change the offset
+        hn->Offset.New = hn->Hmin.NewA;
+
+        //Change gain
         /*
-        if(exp_on){
-            tmp = hn->Y.New/st;
-            if(tmp >= 3) hn->Exp.New = hn->Exp.Old*2/3;
-            else hn->Exp.New = hn->Exp.Old*(3*st - hn->Y.New)/(st*2);
-            if(hn->Exp.New > hn->Exp.Range.max)  hn->Exp.New = hn->Exp.Range.max;
-            if(hn->Y.New == 250){
-                hn->Y.Diff = 0;
-                hn->Y.Max = Y;
-                hn->Y.Min = Y;
-                exp_on = 0;
-            }
-        } else {
-            if(Y > hn->Y.Max) hn->Y.Max = Y;
-            if(Y < hn->Y.Min) hn->Y.Min = Y;
-            if(hn->Y.Max) hn->Y.Diff = (hn->Y.Max - hn->Y.Min)*100/hn->Y.New;
-            if(hn->Y.Diff > 5) exp_on = 1;
-        }
-        */
+             if(hn->Y.New - hn->Offset.New) hn->GIFIF.New = ((hn->HmaxTh>>2)<<9)/(hn->Y.New - hn->Offset.New);
+             up = hn->Hmax.New*hn->GIFIF.New>>9;
+             //printf("up = %d hn->HmaxTh = %d hn->GIFIF.New = %d", up, hn->HmaxTh, hn->GIFIF.New);
+             if((up < hn->HmaxTh) && (hn->Y.New - hn->Offset.New))
+                 hn->GIFIF.New = (((hn->HmaxTh*2 - up)>>2)<<9)/(hn->Y.New - hn->Offset.New);
+             */
+        if(hn->Y.NewA - hn->Offset.New) hn->GIFIF.New = ((hn->HmaxTh>>2)<<9)/(hn->Y.NewA - hn->Offset.New);
+        up = hn->Hmax.NewA*hn->GIFIF.New>>9;
+        //printf("up = %d hn->HmaxTh = %d hn->GIFIF.New = %d", up, hn->HmaxTh, hn->GIFIF.New);
+        if((up < hn->HmaxTh) && (hn->Y.NewA - hn->Offset.New))
+            if(hn->Y.NewA - hn->Offset.New) hn->GIFIF.New = (((hn->HmaxTh*2 - up)>>2)<<9)/(hn->Y.NewA - hn->Offset.New);
 
-        //}
+        //If not enough IFIF gain add rgb2rgb gain
+        if(hn->GIFIF.New > hn->GIFIF.Range.max){
+            hn->Grgb2rgb.New = (hn->GIFIF.New*256/hn->GIFIF.Range.max);
+        } else {
+            hn->Grgb2rgb.New = 256;
+        }
+
+        //Check gain range
+        hn->GIFIF.New = hn->GIFIF.New > hn->GIFIF.Range.max ? hn->GIFIF.Range.max : hn->GIFIF.New;
+        hn->GIFIF.New = hn->GIFIF.New < hn->GIFIF.Range.min ? hn->GIFIF.Range.min : hn->GIFIF.New;
+        hn->Grgb2rgb.New = hn->Grgb2rgb.New > hn->Grgb2rgb.Range.max ? hn->Grgb2rgb.Range.max : hn->Grgb2rgb.New;
+        hn->Grgb2rgb.New = hn->Grgb2rgb.New < hn->Grgb2rgb.Range.min ? hn->Grgb2rgb.Range.min : hn->Grgb2rgb.New;
+
+        printf("hn->Offset.New = %d hn->GIFIF.New = %d\n", hn->Offset.New, hn->GIFIF.New);
+
         //Check Low light condition
         //First down fps
         if ( FPShigh == 1 && IRcutClose == 1 && Y < 100 ) {
@@ -392,161 +447,35 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
                 //if(DEBUG) dprintf("FPS UP : YN %d YO %d \n", hn->Y.New, hn->Y.Old);
             }
         }
-        //Second open IR-cut
-        if(gIRCut == ALG_IRCUT_AUTO){
-            //Got to night mode
-            if ( FPShigh == 0 && IRcutClose == 1 && Y < 100) {
-                frame_count += leave_frames;
-                if (frame_count > 300) {
-                    IRcutClose = 0;
-                    frame_count = 0;
-                    //if(DEBUG) dprintf("IR OPEN : YN %d YO %d \n", hn->Y.New, hn->Y.Old);
-                }
-            }
-            //Come back to day mode
-            if ( FPShigh == 0 && IRcutClose == 0 && Y > 240) {
-                frame_count += leave_frames;
-                if (frame_count > 300) {
-                    IRcutClose = 1;
-                    frame_count = 0;
-                    //if(DEBUG) dprintf("IR CLOSE : YN %d YO %d \n", hn->Y.New, hn->Y.Old);
-                }
-            }
-        }
-
-        if(0) { //gHDR
-            //Make gamma table for each color
-            int vl0, vl1, st, st1, r1;
-            int min1, max1, min2, minn, maxn, minn2;
-
-            //min1 = (hn->Hmin.New<<6)/hn->Rgain.New;
-            //max1 = (hn->Hmax.New<<6)/hn->Rgain.New;
-            min1 = hn->Hmin.New>>3;
-            max1 = hn->Hmax.New>>3;
-            st = (1<<20)/(max1 - min1);
-            min2 = min1<<3;
-            minn = lut1[min1<<3];
-            maxn = lut1[max1<<3];
-            //minn2 = lut1[min1<<3];
-            st1 = (1<<23)/(maxn - minn);
-
-            //Red gamma table
-            vl0 = 0;
-            for(i=0; i < hsz; i++){
-                r = lut[i]*hn->Rgain.New>>9;
-                if(r > Ai){
-                    if(r > Bi) r = ((r-Bi)>>g2) + Bi;
-                    else r = ((r-Ai)>>g1) + Ai;
-                }
-                r1 = r>>3;
-
-                if(r1 < min1) vl1 = 0;
-                else if(r1 >= min1  && r1 < max1) {
-                    //vl1 = (r1 - min1)*st>>10;
-                    vl1 = (lut1[r] - minn)*st1>>13;
-                }
-                else vl1 = 1023;
-                hn->RGB[0][i] = (vl0<<10) | (vl1 - vl0);
-                vl0 = vl1;
-            }
-
-            //Green gamma table
-            /*
-            vl0 = 0;
-            for(i=0; i < 512; i++){
-                if(i < min1) vl1 = 0;
-                else if(i >= min1 && i < max1) {
-                    vl1 = (i - min1)*st>>10;
-                }
-                else vl1 = 1023;
-                hn->RGB[1][i] = (vl0<<10) | (vl1 - vl0);
-                vl0 = vl1;
-            }
-            */
-
-            vl0 = 0;
-            for(i=0; i < 512; i++){
-                if(i < min1) vl1 = 0;
-                else if(i >= min1 && i < max1) {
-                    vl1 = (lut1[i<<3] - minn)*st1>>13;
-                    //vl1 = (i - min1)*st>>10;
-                }
-                else vl1 = 1023;
-                hn->RGB[1][i] = (vl0<<10) | (vl1 - vl0);
-                vl0 = vl1;
-            }
-
-            //Blue gamma table
-            vl0 = 0;
-            for(i=0; i < hsz; i++){
-                r = lut[i]*hn->Bgain.New>>9;
-                if(r > Ai){
-                    if(r > Bi) r = ((r-Bi)>>g2) + Bi;
-                    else r = ((r-Ai)>>g1) + Ai;
-                }
-                r1 = r>>3;
-
-                if(r1 < min1) vl1 = 0;
-                else if(r1 >= min1  && r1 < max1) {
-                    //vl1 = (r1 - min1)*st>>10;
-                    vl1 = (lut1[r] - minn)*st1>>13;
-                }
-                else vl1 = 1023;
-                hn->RGB[2][i] = (vl0<<10) | (vl1 - vl0);
-                vl0 = vl1;
-            }
-
-            printf("A1 = %d B1 = %d Rgain = %d Bgain  = %d min1 = %d max = %d minn = %d maxn = %d st1 = %d\n",
-                   A1, B1, hn->Rgain.New, hn->Bgain.New, min1, max1, minn, maxn, st1);
-
-            for(i=0; i < 512; i++){
-                if(i == min1) printf("min1\n");
-                else if(i == max1) printf("max1\n");
-                else if(i == A1) printf("A1\n");
-                else if(i == B1) printf("B1\n");
-
-                printf("%3d R %4d  %4d  G %4d  %4d  B %4d  %4d lut = %d lut1 = %d\n",
-                       i, hn->RGB[0][i]>>10, hn->RGB[0][i]&1023, hn->RGB[1][i]>>10, hn->RGB[1][i]&1023, hn->RGB[2][i]>>10, hn->RGB[2][i]&1023, lut[i], lut1[i<<3]);
-            }
-        } else {
-            //Change the offset
-            hn->Offset.New = hn->Hmin.NewA;
-
-            //Change gain
-            /*
-            if(hn->Y.NewA - hn->Offset.New) hn->GIFIF.New = ((hn->HmaxTh>>2)<<9)/(hn->Y.NewA - hn->Offset.New);
-            up = hn->Hmax.NewA*hn->GIFIF.New>>9;
-            //printf("up = %d hn->HmaxTh = %d hn->GIFIF.New = %d", up, hn->HmaxTh, hn->GIFIF.New);
-            if((up < hn->HmaxTh) && (hn->Y.NewA - hn->Offset.New))
-                hn->GIFIF.New = (((hn->HmaxTh*2 - up)>>2)<<9)/(hn->Y.NewA - hn->Offset.New);
-                */
-            //Change gain
-            if(hn->Y.New - hn->Offset.New) hn->GIFIF.New = ((hn->HmaxTh>>2)<<9)/(hn->Y.New - hn->Offset.New);
-            up = hn->Hmax.New*hn->GIFIF.New>>9;
-            //printf("up = %d hn->HmaxTh = %d hn->GIFIF.New = %d", up, hn->HmaxTh, hn->GIFIF.New);
-            if((up < hn->HmaxTh) && (hn->Y.New - hn->Offset.New))
-                hn->GIFIF.New = (((hn->HmaxTh*2 - up)>>2)<<9)/(hn->Y.New - hn->Offset.New);
-
-            //If not enough IFIF gain add rgb2rgb gain
-            if(hn->GIFIF.New > hn->GIFIF.Range.max){
-                hn->Grgb2rgb.New = (hn->GIFIF.New*256/hn->GIFIF.Range.max);
-            } else {
-                hn->Grgb2rgb.New = 256;
-            }
-
-            //Check gain range
-            hn->GIFIF.New = hn->GIFIF.New > hn->GIFIF.Range.max ? hn->GIFIF.Range.max : hn->GIFIF.New;
-            hn->GIFIF.New = hn->GIFIF.New < hn->GIFIF.Range.min ? hn->GIFIF.Range.min : hn->GIFIF.New;
-            hn->Grgb2rgb.New = hn->Grgb2rgb.New > hn->Grgb2rgb.Range.max ? hn->Grgb2rgb.Range.max : hn->Grgb2rgb.New;
-            hn->Grgb2rgb.New = hn->Grgb2rgb.New < hn->Grgb2rgb.Range.min ? hn->Grgb2rgb.Range.min : hn->Grgb2rgb.New;
-
-        }
         hn->Y.Old = hn->Y.New;
-        if(GN[0] > 4 && !wbup) { GN[0] /= 2; GN[2] /= 2; }
-        else if(GN[0] == 4  ) { wbup = 1; GN[0] *= 2; GN[2] *= 2;}
-        else if(GN[0] <  16 && wbup) { GN[0] *= 2; GN[2] *= 2; }
-        else if(GN[0] == 16) { wbup = 0; GN[0] /= 2; GN[2] /= 2;}
     }
+
+    //Second open IR-cut
+    if(gIRCut == ALG_IRCUT_AUTO){
+        //Got to night mode
+        if ( FPShigh == 0 && IRcutClose == 1 && Y < 100) {
+            frame_count += leave_frames;
+            if (frame_count > 300) {
+                IRcutClose = 0;
+                frame_count = 0;
+                //if(DEBUG) dprintf("IR OPEN : YN %d YO %d \n", hn->Y.New, hn->Y.Old);
+            }
+        }
+        //Come back to day mode
+        if ( FPShigh == 0 && IRcutClose == 0 && Y > 240) {
+            frame_count += leave_frames;
+            if (frame_count > 300) {
+                IRcutClose = 1;
+                frame_count = 0;
+                //if(DEBUG) dprintf("IR CLOSE : YN %d YO %d \n", hn->Y.New, hn->Y.Old);
+            }
+        }
+    }
+    if(GN[0] > 4 && !wbup) { GN[0] /= 2; GN[2] /= 2; }
+    else if(GN[0] == 4  ) { wbup = 1; GN[0] *= 2; GN[2] *= 2;}
+    else if(GN[0] <  16 && wbup) { GN[0] *= 2; GN[2] *= 2; }
+    else if(GN[0] == 16) { wbup = 0; GN[0] /= 2; GN[2] /= 2;}
+    //}
     frames++;
     return(IAES_EOK);
 }

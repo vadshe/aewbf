@@ -29,6 +29,11 @@ extern int gHDR;
 extern Uint32  gamma01[], gamma005[], gamma001[], SIG_YEE_TABLE[];
 extern Int32 leave_frames;
 
+//For HDR mode
+extern int A, B, g1, g2;
+extern Uint32 lut[], lut1[];
+
+
 int DEBUG = 1, raw = 0;
 
 short SIG_2A_SetEEValues(int shift_val) //shift=3 for 1080P/720P, shift=4 for D1
@@ -85,7 +90,7 @@ int Get_BoxCar(IALG_Handle handle)
     IAEWBF_SIG_Obj *hn = (IAEWBF_SIG_Obj *)handle;
     OSA_BufInfo *pBufInfo;
 
-    status = DRV_ipipeGetBoxcarBuf(&bufId, 1<<31); //OSA_TIMEOUT_NONE);
+    status = DRV_ipipeGetBoxcarBuf(&bufId, OSA_TIMEOUT_NONE);
     if(status!= OSA_SOK) {
         OSA_ERROR("ERROR: DRV_ipipeGetBoxcarBuf()\n");
         return status;
@@ -97,7 +102,13 @@ int Get_BoxCar(IALG_Handle handle)
     hn->box = pBufInfo->virtAddr;
     hn->w = gDRV_ipipeObj.boxcarInfo.width;
     hn->h = gDRV_ipipeObj.boxcarInfo.height;
+    //For Hight resolution we can get only half size of boxcar
+    if(hn->w == 162 && hn->h == 120) hn->h = 60;
+    if(hn->w == 160 && hn->h == 90)  hn->h = 45;
+    if(hn->w == 144 && hn->h == 82)  hn->h = 41;
+
     hn->SatTh = hn->w*hn->h*3/300;
+    printf("box = %p w = %d h = %d SatTh = %d\n", hn->box, hn->w, hn->h, hn->SatTh);
 
     return OSA_SOK;
 }
@@ -106,6 +117,14 @@ void ALG_SIG_config(IALG_Handle handle)
 {
     IAEWBF_SIG_Obj *hn = (IAEWBF_SIG_Obj *)handle;
     char zoomvalue[4];
+    int i, j;
+    //HDR mode
+    int ga = (1<<g1)-1, gb = (1<<(g2-g1))-1;
+    int Ai = A, Bi = (((B - A)<<g1) + A);
+    int A1 = A>>3, B1 = B>>3, A1h = A1>>1, Ah = 0;
+    int An, Bn;
+    Uint32 hsz = ALG_SENSOR_BITS;
+
 
     //Uint32 tables[512];
     CSL_IpipeGammaConfig dataG;
@@ -131,6 +150,29 @@ void ALG_SIG_config(IALG_Handle handle)
     if(raw) DRV_isifSetDcSub(0);
     else DRV_isifSetDcSub(-ZERO);
     if(!raw) SIG_2A_SetEEValues(3);
+
+    if(gHDR) {
+        //Make LUTs
+        for(i=0; i < hsz; i++){
+            j = i<<3;
+            if(j > A){
+                if(j > B) lut[i] = ((j-B)<<g2) + Bi;
+                else lut[i] = ((j-A)<<g1) + Ai;
+            } else lut[i] = j;
+        }
+
+        An = Ah + (A-Ah)*A/(A + (A-Ah)*ga);
+        for(i=0; i < 4096; i++){
+            if(i < A) {
+                if(i < Ah) lut1[i] = i;
+                else lut1[i] = Ah + (i-Ah)*A/(A + (i-Ah)*ga);
+            }
+            //else if(i >= A1 && i < B1) lut1[i] = An + (i-A1)*B1/(B1 + (i-A1)*gb) ;
+            //else lut1[i] = Bn + (i-B1);
+            else lut1[i] = An + (i-A);
+        }
+
+    }
 
     //Config contrast and Brightness
     //DRV_ipipeSetYoffet((pParm->yuv_adj_brt-128));
@@ -159,6 +201,7 @@ void ALG_SIG_config(IALG_Handle handle)
     if(CSL_ipipeSetGammaConfig(&gCSL_ipipeHndl, &dataG) != CSL_SOK)
         OSA_ERROR("Fail CSL_ipipeSetGammaConfig!!!\n");
 
+
     //Config RGB2RGB matrix
     rgb2rgb1.matrix[0][0] = 256;
     rgb2rgb1.matrix[0][1] = 0;
@@ -176,71 +219,74 @@ void ALG_SIG_config(IALG_Handle handle)
     rgb2rgb1.offset[1]    = 0;
     rgb2rgb1.offset[2]    = 0;
 
-    rgb2rgb2.matrix[0][0] = 256;
-    rgb2rgb2.matrix[0][1] = 0;
-    rgb2rgb2.matrix[0][2] = 0;
+    if(gHDR){
+        rgb2rgb2.matrix[0][0] = 256;
+        rgb2rgb2.matrix[0][1] = 0;
+        rgb2rgb2.matrix[0][2] = 0;
 
-    rgb2rgb2.matrix[1][0] = 0;
-    rgb2rgb2.matrix[1][1] = 256;
-    rgb2rgb2.matrix[1][2] = 0;
+        rgb2rgb2.matrix[1][0] = 0;
+        rgb2rgb2.matrix[1][1] = 256;
+        rgb2rgb2.matrix[1][2] = 0;
 
-    rgb2rgb2.matrix[2][0] = 0;
-    rgb2rgb2.matrix[2][1] = 0;
-    rgb2rgb2.matrix[2][2] = 256;
+        rgb2rgb2.matrix[2][0] = 0;
+        rgb2rgb2.matrix[2][1] = 0;
+        rgb2rgb2.matrix[2][2] = 256;
+    } else {
+        if(!raw){
+            if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9M034_720P") == 0) {
+                rgb2rgb2.matrix[0][0] = 427;
+                rgb2rgb2.matrix[0][1] = -105;
+                rgb2rgb2.matrix[0][2] = -66;
 
-    if(!raw){
-        if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9M034_720P") == 0) {
-            rgb2rgb2.matrix[0][0] = 427;
-            rgb2rgb2.matrix[0][1] = -105;
-            rgb2rgb2.matrix[0][2] = -66;
+                rgb2rgb2.matrix[1][0] = -99;
+                rgb2rgb2.matrix[1][1] = 422;
+                rgb2rgb2.matrix[1][2] = -67;
 
-            rgb2rgb2.matrix[1][0] = -99;
-            rgb2rgb2.matrix[1][1] = 422;
-            rgb2rgb2.matrix[1][2] = -67;
+                rgb2rgb2.matrix[2][0] = -8;
+                rgb2rgb2.matrix[2][1] = -78;
+                rgb2rgb2.matrix[2][2] = 342;
+            } else if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0) {
+                rgb2rgb2.matrix[0][0] = 380;
+                rgb2rgb2.matrix[0][1] = -59;
+                rgb2rgb2.matrix[0][2] = -66;
 
-            rgb2rgb2.matrix[2][0] = -8;
-            rgb2rgb2.matrix[2][1] = -78;
-            rgb2rgb2.matrix[2][2] = 342;
-        } else if (strcmp(DRV_imgsGetImagerName(), "MICRON_AR0331_1080P") == 0) {
-            rgb2rgb2.matrix[0][0] = 380;
-            rgb2rgb2.matrix[0][1] = -59;
-            rgb2rgb2.matrix[0][2] = -66;
+                rgb2rgb2.matrix[1][0] = -89;
+                rgb2rgb2.matrix[1][1] = 402;
+                rgb2rgb2.matrix[1][2] = -57;
 
-            rgb2rgb2.matrix[1][0] = -89;
-            rgb2rgb2.matrix[1][1] = 402;
-            rgb2rgb2.matrix[1][2] = -57;
+                rgb2rgb2.matrix[2][0] = -8;
+                rgb2rgb2.matrix[2][1] = -98;
+                rgb2rgb2.matrix[2][2] = 362;
+            } else if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9P031_5MP") == 0) {
+                //hn->HISTTH = 30; //Reduse threshold to remove nonliniarity
 
-            rgb2rgb2.matrix[2][0] = -8;
-            rgb2rgb2.matrix[2][1] = -98;
-            rgb2rgb2.matrix[2][2] = 362;
-        } else if (strcmp(DRV_imgsGetImagerName(), "MICRON_MT9P031_5MP") == 0) {
-            //hn->HISTTH = 30; //Reduse threshold to remove nonliniarity
+                rgb2rgb2.matrix[0][0] = 380;
+                rgb2rgb2.matrix[0][1] = -59;
+                rgb2rgb2.matrix[0][2] = -66;
 
-            rgb2rgb2.matrix[0][0] = 380;
-            rgb2rgb2.matrix[0][1] = -59;
-            rgb2rgb2.matrix[0][2] = -66;
+                rgb2rgb2.matrix[1][0] = -89;
+                rgb2rgb2.matrix[1][1] = 402;
+                rgb2rgb2.matrix[1][2] = -57;
 
-            rgb2rgb2.matrix[1][0] = -89;
-            rgb2rgb2.matrix[1][1] = 402;
-            rgb2rgb2.matrix[1][2] = -57;
+                rgb2rgb2.matrix[2][0] = -8;
+                rgb2rgb2.matrix[2][1] = -168;
+                rgb2rgb2.matrix[2][2] = 432;
+            } else if(strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0){
+                rgb2rgb2.matrix[0][0] = 360;
+                rgb2rgb2.matrix[0][1] = -153;
+                rgb2rgb2.matrix[0][2] = 49;
 
-            rgb2rgb2.matrix[2][0] = -8;
-            rgb2rgb2.matrix[2][1] = -168;
-            rgb2rgb2.matrix[2][2] = 432;
-        } else if(strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0){
-            rgb2rgb2.matrix[0][0] = 360;
-            rgb2rgb2.matrix[0][1] = -153;
-            rgb2rgb2.matrix[0][2] = 49;
+                rgb2rgb2.matrix[1][0] = -92;
+                rgb2rgb2.matrix[1][1] = 312;
+                rgb2rgb2.matrix[1][2] = 36;
 
-            rgb2rgb2.matrix[1][0] = -92;
-            rgb2rgb2.matrix[1][1] = 312;
-            rgb2rgb2.matrix[1][2] = 36;
-
-            rgb2rgb2.matrix[2][0] = 37;
-            rgb2rgb2.matrix[2][1] = -338;
-            rgb2rgb2.matrix[2][2] = 557;
+                rgb2rgb2.matrix[2][0] = 37;
+                rgb2rgb2.matrix[2][1] = -338;
+                rgb2rgb2.matrix[2][2] = 557;
+            }
         }
     }
+
     rgb2rgb2.offset[0]    = 0;
     rgb2rgb2.offset[1]    = 0;
     rgb2rgb2.offset[2]    = 0;
@@ -266,6 +312,7 @@ void ALG_SIG_config(IALG_Handle handle)
 void print_debug(int frames, int leave_frames, IAEWBF_SIG_Obj *hn){
     int i = 0, fr = frames%leave_frames, all = frames%150;
     //all = fr;
+    all = 0; fr = 0;
 
     if(DEBUG && (!fr)){
         if(gIRCut != hn->gIRCut || gBWMode != hn->gBWMode || FPShigh != hn->FPShigh ||
@@ -364,11 +411,12 @@ void SIG2A_applySettings(void)
                 hn->Exp.Range.max = 1000000/hn->FPScur;
                 //hn->Exp.New  = (hn->Exp.Range.max/hn->Exp.Step)*hn->Exp.Step;
             }
+
             hn->Exp.New  = (hn->Exp.Range.max/hn->Exp.Step)*hn->Exp.Step;
             hn->Exp.Old = hn->Exp.New;
             hn->FPShigh = FPShigh;
             hn->gAePriorityMode = gAePriorityMode;
-            DRV_imgsSetEshutter(hn->Exp.Old, 0);
+            DRV_imgsSetEshutter(hn->Exp.New, 0);
             printf("defaultFPS = %d hn->Exp.New = %d hn->Exp.Range.max = %d hn->Exp.Step = %d\n",
                    defaultFPS, hn->Exp.New, hn->Exp.Range.max, hn->Exp.Step);
         }
@@ -394,14 +442,7 @@ void SIG2A_applySettings(void)
         }
 
     if(!raw){
-        //Seting Expouse
-        if(hn->Exp.New != hn->Exp.Old) {
-            smooth_change(&hn->Exp, fr);
-            DRV_imgsSetEshutter(hn->Exp.Old, 0);
-            //hn->Exp.Old = hn->Exp.New;
-        }
-
-        if(0){ //gHDR
+        if(gHDR){ //gHDR
             //Config gamma correction tables
             if(hn->Rgain.New != hn->Rgain.Old || hn->Bgain.New != hn->Bgain.Old){
                 dataG.tableSize = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SIZE_512;
@@ -417,6 +458,12 @@ void SIG2A_applySettings(void)
                     OSA_ERROR("Fail CSL_ipipeSetGammaConfig!!!\n");
             }
         } else {
+            //Seting Expouse
+            if(hn->Exp.New != hn->Exp.Old) {
+                smooth_change(&hn->Exp, fr);
+                DRV_imgsSetEshutter(hn->Exp.Old, 0);
+                //hn->Exp.Old = hn->Exp.New;
+            }
             //ISIF gain seting
             if(hn->Rgain.New != hn->Rgain.Old || hn->Bgain.New != hn->Bgain.Old){
                 smooth_change(&hn->Rgain, fr);
@@ -566,6 +613,7 @@ int SIG_2A_config(IALG_Handle handle)
     hn->Hmin.Avrg = 0;
 
     hn->HmaxTh = 3500;
+    hn->YAE = 500;
     hn->SatTh = hn->w*hn->h*3/100;
 
 
