@@ -90,7 +90,7 @@ int Get_BoxCar(IALG_Handle handle)
     IAEWBF_SIG_Obj *hn = (IAEWBF_SIG_Obj *)handle;
     OSA_BufInfo *pBufInfo;
 
-    status = DRV_ipipeGetBoxcarBuf(&bufId, OSA_TIMEOUT_NONE);
+    status = DRV_ipipeGetBoxcarBuf(&bufId, 1<<30); //OSA_TIMEOUT_NONE
     if(status!= OSA_SOK) {
         OSA_ERROR("ERROR: DRV_ipipeGetBoxcarBuf()\n");
         return status;
@@ -102,13 +102,14 @@ int Get_BoxCar(IALG_Handle handle)
     hn->box = pBufInfo->virtAddr;
     hn->w = gDRV_ipipeObj.boxcarInfo.width;
     hn->h = gDRV_ipipeObj.boxcarInfo.height;
+
     //For Hight resolution we can get only half size of boxcar
     if(hn->w == 162 && hn->h == 120) hn->h = 60;
     if(hn->w == 160 && hn->h == 90)  hn->h = 45;
     if(hn->w == 144 && hn->h == 82)  hn->h = 41;
 
     hn->SatTh = hn->w*hn->h*3/300;
-    printf("box = %p w = %d h = %d SatTh = %d\n", hn->box, hn->w, hn->h, hn->SatTh);
+    //printf("box = %p w = %d h = %d SatTh = %d\n", hn->box, hn->w, hn->h, hn->SatTh);
 
     return OSA_SOK;
 }
@@ -312,7 +313,7 @@ void ALG_SIG_config(IALG_Handle handle)
 void print_debug(int frames, int leave_frames, IAEWBF_SIG_Obj *hn){
     int i = 0, fr = frames%leave_frames, all = frames%150;
     //all = fr;
-    all = 0; fr = 0;
+    //all = 0; fr = 0;
 
     if(DEBUG && (!fr)){
         if(gIRCut != hn->gIRCut || gBWMode != hn->gBWMode || FPShigh != hn->FPShigh ||
@@ -333,8 +334,8 @@ void print_debug(int frames, int leave_frames, IAEWBF_SIG_Obj *hn){
             i++;
         }
         if(hn->Rgain.New != hn->Rgain.Old || hn->Bgain.New != hn->Bgain.Old || !all){
-            dprintf("%6d   GAIN WB      : Rgain.New = %4d Rgain.Old = %4d Bgain.New = %4d Bgain.Old = %4d \n",
-                    frames, hn->Rgain.New, hn->Rgain.Old, hn->Bgain.New, hn->Bgain.Old);
+            dprintf("%6d   GAIN WB      : Rgain.NewA = %4d Rgain.New = %4d Rgain.Old = %4d Bgain.NewA = %4d Bgain.New = %4d Bgain.Old = %4d \n",
+                    frames, hn->Rgain.NewA, hn->Rgain.New, hn->Rgain.Old, hn->Bgain.NewA, hn->Bgain.New, hn->Bgain.Old);
             i++;
         }
         if(hn->GIFIF.New !=  hn->GIFIF.Old || !all) {
@@ -468,9 +469,9 @@ void SIG2A_applySettings(void)
             if(hn->Rgain.New != hn->Rgain.Old || hn->Bgain.New != hn->Bgain.Old){
                 smooth_change(&hn->Rgain, fr);
                 smooth_change(&hn->Bgain, fr);
-                DRV_isifSetDgain(512 , hn->Rgain.Old, hn->Bgain.Old, 512, 0);
                 //hn->Rgain.Old = hn->Rgain.New;
                 //hn->Bgain.Old = hn->Bgain.New;
+                DRV_isifSetDgain(512 , hn->Rgain.Old, hn->Bgain.Old, 512, 0);
             }
 
             if(hn->Offset.New != hn->Offset.Old) {
