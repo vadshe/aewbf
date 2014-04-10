@@ -466,6 +466,7 @@ void SIG2A_applySettings(void)
                 //hn->Exp.Old = hn->Exp.New;
             }
             //ISIF gain seting
+
             if(hn->Rgain.New != hn->Rgain.Old || hn->Bgain.New != hn->Bgain.Old){
                 smooth_change(&hn->Rgain, fr);
                 smooth_change(&hn->Bgain, fr);
@@ -481,13 +482,35 @@ void SIG2A_applySettings(void)
             }
 
             if(hn->GIFIF.New !=  hn->GIFIF.Old){
+            //if(hn->GIFIF.New !=  hn->GIFIF.Old || hn->Rgain.New != hn->Rgain.Old || hn->Bgain.New != hn->Bgain.Old){
+                /*
+                if(hn->Rgain.New <= 512 && hn->Bgain.New <= 512){
+                    ipipeWb.gainR  = hn->GIFIF.New*hn->Rgain.New/512;
+                    ipipeWb.gainGr = hn->GIFIF.New;
+                    ipipeWb.gainGb = hn->GIFIF.New;
+                    ipipeWb.gainB  = hn->GIFIF.New*hn->Bgain.New/512;
+                } else if(hn->Rgain.New >= 512 && hn->Rgain.New >= hn->Bgain.New){
+                    ipipeWb.gainR  = hn->GIFIF.New;
+                    ipipeWb.gainGr = hn->GIFIF.New*512/hn->Rgain.New;
+                    ipipeWb.gainGb = ipipeWb.gainGr;
+                    ipipeWb.gainB  = hn->GIFIF.New*hn->Bgain.New/hn->Rgain.New;
+                } else {
+                    ipipeWb.gainR  = hn->GIFIF.New*hn->Rgain.New/hn->Bgain.New;
+                    ipipeWb.gainGr = hn->GIFIF.New*512/hn->Bgain.New;
+                    ipipeWb.gainGb = ipipeWb.gainGr;
+                    ipipeWb.gainB  = hn->GIFIF.New;
+                }
+                dprintf("gainR = %d gainG = %d gainB = %d\n", ipipeWb.gainR, ipipeWb.gainGr, ipipeWb.gainB);
+                hn->GIFIF.Old = hn->GIFIF.New;
+                hn->Rgain.Old = hn->Rgain.New;
+                hn->Bgain.Old = hn->Bgain.New;
+                */
                 smooth_change(&hn->GIFIF, fr);
                 ipipeWb.gainR  = hn->GIFIF.Old;
                 ipipeWb.gainGr = hn->GIFIF.Old;
                 ipipeWb.gainGb = hn->GIFIF.Old;
                 ipipeWb.gainB  = hn->GIFIF.Old;
                 DRV_ipipeSetWb(&ipipeWb);
-                //hn->GIFIF.Old = hn->GIFIF.New;
             }
 
             //Config RGB2RGB matrix for more gain
@@ -589,7 +612,9 @@ int SIG_2A_config(IALG_Handle handle)
     hn->Grgb2rgb.Old = 256;
     hn->Grgb2rgb.New = 256;
     hn->Grgb2rgb.Range.min = 1;
-    hn->Grgb2rgb.Range.max = 512;
+    if(strcmp(DRV_imgsGetImagerName(), "SONY_IMX136_3MP") == 0)
+        hn->Grgb2rgb.Range.max = 512;
+    else hn->Grgb2rgb.Range.max = 256;
 
     //Y setup
     hn->Y.Step = 1;

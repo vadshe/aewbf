@@ -19,11 +19,13 @@ extern IAEWBF_Fxns IAEWBF_SIG_IALG;
 extern int gIRCut, gFlicker;
 int IRcutClose = 1; //IR-cut 1-open, 0 - close
 int FPShigh = 1; //FPS 1-high, 0 - low
-int GN[3] = { 16, 0, -16}, wbup = 0;
+int GN[3] = { -8, 0, 8}, wbup = 0;
+Uint32 RGN = 1<<30, BGN = 1<<30;
 int GNR[3] = { 32, 0, -32};
 int GNB[3] = { 32, 0, -32};
 int rmin[2] = {0, 0}, bmin[2] = {0, 0};
 int RR=0, GG=0, BB=0, RR1, GG1, BB1;
+int bw = 0;
 
 extern int gHDR;
 extern int DEBUG;
@@ -328,10 +330,20 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             hist[r>>3]++;
             hist[g>>3]++;
             hist[b>>3]++;
-
+            /*
+            tmp = r*hn->Rgain.Old>>12;
+            tmp = tmp > 511 ? 511 : tmp;
+            hist[tmp]++;
+            hist[g>>3]++;
+            tmp = r*hn->Bgain.Old>>12;
+            tmp = tmp > 511 ? 511 : tmp;
+            hist[tmp]++;
+            */
             for(j=0; j < ns; j++) {
                 GB[j] += abs(g - (b*(512 + GN[j])>>9));
                 GR[j] += abs(g - (r*(512 + GN[j])>>9));
+                //GR[j] += abs(g - (r*(hn->Rgain.Old + GN[j])>>9));
+                //GB[j] += abs(g - (b*(hn->Bgain.Old + GN[j])>>9));
             }
         }
 
@@ -345,6 +357,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             printf("GR = %d GG = %d GB = %d\n", (RR1-RR)*512/RR1, (GG1-GG)*512/GG1, (BB1-BB)*512/BB1);
         }
         RR1 = RR; GG1 = GG; BB1 = BB;
+
 
         //Make integral histogram
         for(i=1; i < hsz; i++) hist[i] += hist[i-1];
@@ -368,34 +381,53 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         diff = add_history(&hn->Y);
 
         //White balance oldalgorithm
+        if(frames > 3){
+            if(0){
+            //if(IRcutClose){
+                min = GR[0]; minr = 0;
+                for(j=1; j < ns; j++){
+                    if(GR[j] < min) { min = GR[j]; minr = j; }
+                }
+                min = GB[0]; minb = 0;
+                for(j=1; j < ns; j++){
+                    if(GB[j] < min) { min = GB[j]; minb = j; }
+                }
 
-        min = GR[0]; minr = 0;
-        for(j=1; j < ns; j++){
-            if(GR[j] < min) { min = GR[j]; minr = j; }
-        }
-        min = GB[0]; minb = 0;
-        for(j=1; j < ns; j++){
-            if(GB[j] < min) { min = GB[j]; minb = j; }
-        }
+                printf("GR = %d GG = %d GB = %d\n", (GN[minr]*hn->Rgain.Old>>9), 1, (GN[minb]*hn->Bgain.Old>>9));
+                printf("Rgain.Old = %d, Bgain.Old = %d\n", hn->Rgain.Old*(512 + GN[minr])>>9, hn->Bgain.Old*(512 + GN[minb])>>9);
 
-        printf("GR = %d GG = %d GB = %d\n", (GN[minr]*hn->Rgain.Old>>9), 1, (GN[minb]*hn->Bgain.Old>>9));
-        printf("Rgain.Old = %d, Bgain.Old = %d\n", hn->Rgain.Old*(512 + GN[minr])>>9, hn->Bgain.Old*(512 + GN[minb])>>9);
+                //if(minr != 1) hn->Rgain.New = hn->Rgain.Old + GN[minr];
+                //if(minb != 1) hn->Bgain.New = hn->Bgain.Old + GN[minb];
+                printf("RGN = %d, BGN = %d\n", RGN, BGN);
 
-        //if(minr != 1) hn->Rgain.New = hn->Rgain.Old + (GN[minr]<<9)/hn->Rgain.Old;
-        //if(minb != 1) hn->Bgain.New = hn->Bgain.Old + (GN[minb]<<9)/hn->Bgain.Old;
-        if(minr != 1) hn->Rgain.New = hn->Rgain.Old + (GN[minr]*hn->Rgain.Old>>9);
-        if(minb != 1) hn->Bgain.New = hn->Bgain.Old + (GN[minb]*hn->Bgain.Old>>9);
+                //if(GR[minr] < RGN) {
+                    if(minr != 1) hn->Rgain.New = hn->Rgain.Old + (GN[minr]*hn->Rgain.Old>>9);
+                   // RGN = GR[minr];
+                //}
+                //if(GB[minb] < BGN) {
+                    if(minb != 1) hn->Bgain.New = hn->Bgain.Old + (GN[minb]*hn->Bgain.Old>>9);
+                    //BGN = GB[minb];
+                //}
 
-        printf("Rgain.Old = %d, Bgain.Old = %d\n", hn->Rgain.New, hn->Bgain.New);
+                printf("Rgain.New = %d, Bgain.New = %d\n", hn->Rgain.New, hn->Bgain.New);
+                /*
+            if(GN[0] > 4 && !wbup) { GN[0] /= 2; GN[2] /= 2; }
+            else if(GN[0] == 4  ) { wbup = 1; GN[0] *= 2; GN[2] *= 2;}
+            else if(GN[0] <  16 && wbup) { GN[0] *= 2; GN[2] *= 2; }
+            else if(GN[0] == 16) { wbup = 0; GN[0] /= 2; GN[2] /= 2;}
+            */
+            } else {
+                //Night AW mode
+                if(!(bw%3)){
+                    if(RR) hn->Rgain.New = GG*hn->Rgain.Old/RR;
+                    if(BB) hn->Bgain.New = GG*hn->Bgain.Old/BB;
+                }
+                bw++;
+            }
 
-        if(GN[0] > 4 && !wbup) { GN[0] /= 2; GN[2] /= 2; }
-        else if(GN[0] == 4  ) { wbup = 1; GN[0] *= 2; GN[2] *= 2;}
-        else if(GN[0] <  16 && wbup) { GN[0] *= 2; GN[2] *= 2; }
-        else if(GN[0] == 16) { wbup = 0; GN[0] /= 2; GN[2] /= 2;}
 
-
-        //White balance new algorithm
-        /*
+            //White balance new algorithm
+            /*
         rmin[0] = GR[0]; minr = 0;
         for(j=1; j < ns; j++){
             if(GR[j] < rmin[0]) { rmin[0] = GR[j]; minr = j; }
@@ -426,21 +458,22 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         if(minb != 1) hn->Bgain.New = hn->Bgain.Old + (GNB[minb]*hn->Bgain.Old>>9);
         */
 
-        printf("GR[0] = %d GR[1] = %d GR[2] = %d rmin[0] = %d rmin[1] = %d \n",
-               GR[0], GR[1], GR[2], rmin[0], rmin[1]);
-        printf("GB[0] = %d GB[1] = %d GB[2] = %d bmin[0] = %d bmin[1] = %d \n",
-               GB[0], GB[1], GB[2], bmin[0], bmin[1]);
-        printf("diff = %d\n", diff);
+            printf("GR[0] = %d GR[1] = %d GR[2] = %d rmin[0] = %d rmin[1] = %d \n",
+                   GR[0], GR[1], GR[2], rmin[0], rmin[1]);
+            printf("GB[0] = %d GB[1] = %d GB[2] = %d bmin[0] = %d bmin[1] = %d \n",
+                   GB[0], GB[1], GB[2], bmin[0], bmin[1]);
+            printf("diff = %d\n", diff);
 
 
-        //Check range
-        hn->Rgain.New = hn->Rgain.New > hn->Rgain.Range.max ? hn->Rgain.Range.max : hn->Rgain.New;
-        hn->Rgain.New = hn->Rgain.New < hn->Rgain.Range.min ? hn->Rgain.Range.min : hn->Rgain.New;
-        hn->Bgain.New = hn->Bgain.New > hn->Bgain.Range.max ? hn->Bgain.Range.max : hn->Bgain.New;
-        hn->Bgain.New = hn->Bgain.New < hn->Bgain.Range.min ? hn->Bgain.Range.min : hn->Bgain.New;
+            //Check range
+            hn->Rgain.New = hn->Rgain.New > hn->Rgain.Range.max ? hn->Rgain.Range.max : hn->Rgain.New;
+            hn->Rgain.New = hn->Rgain.New < hn->Rgain.Range.min ? hn->Rgain.Range.min : hn->Rgain.New;
+            hn->Bgain.New = hn->Bgain.New > hn->Bgain.Range.max ? hn->Bgain.Range.max : hn->Bgain.New;
+            hn->Bgain.New = hn->Bgain.New < hn->Bgain.Range.min ? hn->Bgain.Range.min : hn->Bgain.New;
 
-        //add_history(&hn->Rgain);
-        //add_history(&hn->Bgain);
+            //add_history(&hn->Rgain);
+            //add_history(&hn->Bgain);
+        }
 
         st = hn->YAE;
         if(gFlicker == VIDEO_NONE){
@@ -451,14 +484,12 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             } else if(tmp > 110 && tmp <= 200) {
                 if(hn->Y.New > st) hn->Exp.New = hn->Exp.Old*99/100;
                 else hn->Exp.New = hn->Exp.Old*100/99;
-                GNR[0] = 16; GNR[2] = -16;
-                GNB[0] = 16; GNB[2] = -16;
+                //RGN = 1<<30, BGN = 1<<30; //Start WB
             }
             if(hn->Exp.New > hn->Exp.Range.max)  hn->Exp.New = hn->Exp.Range.max;
         } else {
             if(diff > 10){
-                GNR[0] = 16; GNR[2] = -16;
-                GNB[0] = 16; GNB[2] = -16;
+                //RGN = 1<<30, BGN = 1<<30; //Start WB
             }
         }
 
@@ -466,13 +497,6 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         hn->Offset.New = hn->Hmin.NewA;
 
         //Change gain
-        /*
-             if(hn->Y.New - hn->Offset.New) hn->GIFIF.New = ((hn->HmaxTh>>2)<<9)/(hn->Y.New - hn->Offset.New);
-             up = hn->Hmax.New*hn->GIFIF.New>>9;
-             //printf("up = %d hn->HmaxTh = %d hn->GIFIF.New = %d", up, hn->HmaxTh, hn->GIFIF.New);
-             if((up < hn->HmaxTh) && (hn->Y.New - hn->Offset.New))
-                 hn->GIFIF.New = (((hn->HmaxTh*2 - up)>>2)<<9)/(hn->Y.New - hn->Offset.New);
-             */
         if(hn->Y.NewA - hn->Offset.New) hn->GIFIF.New = ((hn->HmaxTh>>2)<<9)/(hn->Y.NewA - hn->Offset.New);
         up = hn->Hmax.NewA*hn->GIFIF.New>>9;
         //printf("up = %d hn->HmaxTh = %d hn->GIFIF.New = %d", up, hn->HmaxTh, hn->GIFIF.New);
@@ -480,11 +504,11 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
             if(hn->Y.NewA - hn->Offset.New) hn->GIFIF.New = (((hn->HmaxTh*2 - up)>>2)<<9)/(hn->Y.NewA - hn->Offset.New);
 
         //If not enough IFIF gain add rgb2rgb gain
+
         if(hn->GIFIF.New > hn->GIFIF.Range.max){
             hn->Grgb2rgb.New = (hn->GIFIF.New*256/hn->GIFIF.Range.max);
-        } else {
-            hn->Grgb2rgb.New = 256;
-        }
+        } else hn->Grgb2rgb.New = 256;
+
 
         //Check gain range
         hn->GIFIF.New = hn->GIFIF.New > hn->GIFIF.Range.max ? hn->GIFIF.Range.max : hn->GIFIF.New;
