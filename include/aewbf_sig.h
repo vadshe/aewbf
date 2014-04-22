@@ -11,7 +11,7 @@
 #define GY    0x96
 #define BY    0x1d
 #define ALG_SENSOR_BITS (1<<9)
-#define HISTORY 15
+#define HISTORY 30
 #define ZERO 176 //176 Sony IMX136 zero level
 #define OFF 0 //30
 #define UP 200
@@ -45,21 +45,15 @@ typedef struct ALG_AewbfObj {
 } ALG_AewbfObj;
 
 typedef struct IAEWBF_Param{
-    XDAS_Int32 Old;
-    XDAS_Int32 New;
-    XDAS_Int32 Step;
-    XDAS_Int32 Min;
-    XDAS_Int32 Max;
-    XDAS_Int32 Sat;
-    XDAS_Int32 Diff;
-    XDAS_Int32 Th;
-    XDAS_Int32 Avrg;
-    XDAS_Int32 Avrs;
-    XDAS_Int32 Change;
-    XDAS_Int32 Hist[HISTORY];
-    XDAS_Int32 HistC;
-    XDAS_Int32 NewA;
-    IAEWBF_Range Range;
+    XDAS_Int32 Old;     //Old value
+    XDAS_Int32 New;     //New value
+    XDAS_Int32 Step;    //The step of changing
+    XDAS_Int32 Avrg;    //Sum of all history value
+    XDAS_Int32 Change;  //Need for smooth change
+    XDAS_Int32 Hist[HISTORY];   //History array
+    XDAS_Int32 HistC;           //History count
+    XDAS_Int32 NewA;            //Avarage of value
+    IAEWBF_Range Range;         //The range of value changes
 }IAEWBF_Param;
 
 
