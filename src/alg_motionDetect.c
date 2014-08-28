@@ -370,14 +370,14 @@ static int out_motion_detected(const char *md, const size_t md_len)
 int ALG_motionDetectStart(ALG_MotionObj  *pObj)
 {
 	int detect_cnt = 0;
-    int maxi = 0;
-    size_t x, y, yx, yw, yx1, yw1;
-    const size_t w = pObj->frame_width, h = pObj->frame_height, sz = w*h;
-    size_t ecn = 0, MV_th, add;
+	int maxi = 0;
+	size_t x=0, y, yx, yw, yx1, yw1;
+	const size_t w = pObj->frame_width, h = pObj->frame_height, sz = w*h;
+	size_t ecn = 0, MV_th, add;
 	ALG_MotionDetectMbMvInfo *mbMV_data = pObj->runPrm.mbMvInfo;
 	char *md = pObj->Detected;
 	const char *en = pObj->Enabled;
-    Uint32 *ing = pObj->Ing;
+	Uint32 *ing = pObj->Ing;
 
 	int dr[8] = {-1, -1+w, -w, 1-w, 1, 1+w, w, -1+w};
 	int hi[256]; //Histogram
@@ -393,64 +393,64 @@ int ALG_motionDetectStart(ALG_MotionObj  *pObj)
 			//Get noise statistics and calculate threshold
 			mbMV_data = pObj->runPrm.mbMvInfo;
 			for(y=0; y < h; y++) {
-                yw = y*w;
+				yw = y*w;
 				for(x=0; x < w; x++) {
-                    yx = yw + x;
-                    if(en[yx]) {
-                        hi[mbMV_data[yx].SAD>>8]++; //Fill histogram
-                        //avr += mbMV_data[yx].SAD;
-                        //hi[mbMV_data->SAD>>8]++; //Fill histogram
-                        //avr += mbMV_data->SAD;
-                        //if      (max < mbMV_data->SAD) max = mbMV_data->SAD;
+					yx = yw + x;
+					if(en[yx]) {
+						hi[mbMV_data[yx].SAD>>8]++; //Fill histogram
+						//avr += mbMV_data[yx].SAD;
+						//hi[mbMV_data->SAD>>8]++; //Fill histogram
+						//avr += mbMV_data->SAD;
+						//if      (max < mbMV_data->SAD) max = mbMV_data->SAD;
 						//else if (min > mbMV_data->SAD) min = mbMV_data->SAD;
-                        ecn++;
-                    }
-                    //mbMV_data++;
+						ecn++;
+					}
+					//mbMV_data++;
 				}
 			}
 
-            //Find histogram threshold
-            size_t i, sum = 0;
-            MV_th = ecn*80/100;
-            for(i=0; sum < MV_th; i++) {
-                sum += hi[i];
-                //printf("%  hi = %d sum = %d\n", i, hi[i], sum);
-            }
-            maxi = (i+1)*2;
+			//Find histogram threshold
+			size_t i, sum = 0;
+			MV_th = ecn*80/100;
+			for(i=0; sum < MV_th; i++) {
+				sum += hi[i];
+				//printf("%  hi = %d sum = %d\n", i, hi[i], sum);
+			}
+			maxi = (i+1)*2;
 
-            //avr = (avr >> 8) / sz;
-            pObj->Sad_Threshold = maxi;
-            pObj->Sad_Threshold = pObj->Sad_Threshold << 8;
+			//avr = (avr >> 8) / sz;
+			pObj->Sad_Threshold = maxi;
+			pObj->Sad_Threshold = pObj->Sad_Threshold << 8;
 		} // pObj->frame_count % 30 == 0
 	} else {  //!sig_md.adaptive_threshold
 		pObj->Sad_Threshold = sig_md.threshold << 8;
 	}
 
-    printf("pObj->Sad_Threshold = %d \n", pObj->Sad_Threshold>>8);
+	//printf("pObj->Sad_Threshold = %d \n", pObj->Sad_Threshold>>8);
 
-    //Integral matrix
-    ing[x] = 0;
-    for(x=1; x < w; x++) ing[x] = (en[x] ? mbMV_data[x].SAD + mbMV_data[x].SAD : mbMV_data[x].SAD)>>8;
+	//Integral matrix
+	ing[x] = 0;
+	for(x=1; x < w; x++) ing[x] = (en[x] ? mbMV_data[x].SAD + mbMV_data[x].SAD : mbMV_data[x].SAD)>>8;
 
-    for(y=1; y < h; y++) {
-        yw = y*w;
-        yw1 = (y-1)*w;
-        ing[yw] = ing[yw1];
-        for(x=1; x < w; x++) {
-            yx = yw + x;
-            yx1 = yw1 + x;
-            add = en[yx] ? (mbMV_data[yx].SAD>>8) : 0;
-            ing[yx] = ing[yx-1] + ing[yx1] - ing[yx1-1] + add;
-        }
-    }
+	for(y=1; y < h; y++) {
+		yw = y*w;
+		yw1 = (y-1)*w;
+		ing[yw] = ing[yw1];
+		for(x=1; x < w; x++) {
+			yx = yw + x;
+			yx1 = yw1 + x;
+			add = en[yx] ? (mbMV_data[yx].SAD>>8) : 0;
+			ing[yx] = ing[yx-1] + ing[yx1] - ing[yx1-1] + add;
+		}
+	}
 
-    printf("ing[sz-1] = %d \n", ing[sz-1]);
+	//printf("ing[sz-1] = %d \n", ing[sz-1]);
 
 	mbMV_data = pObj->runPrm.mbMvInfo;
 	for(y=0; y < h; y++) {
-        yw = y*w;
+		yw = y*w;
 		for(x=0; x < w; x++) {
-            yx = yw + x;
+			yx = yw + x;
 			if (en[yx]) {
 				if(mbMV_data->SAD > pObj->Sad_Threshold){
 					md[yx] = 1; //Motion Detected
@@ -465,31 +465,31 @@ int ALG_motionDetectStart(ALG_MotionObj  *pObj)
 		}
 	}
 
-    printf("ing[sz-1] = %d \n", ing[sz-1]);
+	//printf("ing[sz-1] = %d \n", ing[sz-1]);
 	//if (pObj->frame_count % 5 == 0)
 	{
-	    //print_chars2d("Detected", md, w, h);
+		//print_chars2d("Detected", md, w, h);
 #if 0 //debug only
-        if(ecn)
-        dflog(LOG_INFO, "%s():%u  avr: %d  maxi: %d ing: %d ecn: %d Sad_Threshold: %d frame_count: %d",
-          __func__, __LINE__, avr, maxi, ing[sz-1], ecn, pObj->Sad_Threshold>>8, pObj->frame_count);
+		if(ecn)
+			dflog(LOG_INFO, "%s():%u  avr: %d  maxi: %d ing: %d ecn: %d Sad_Threshold: %d frame_count: %d",
+			      __func__, __LINE__, avr, maxi, ing[sz-1], ecn, pObj->Sad_Threshold>>8, pObj->frame_count);
 #endif
 	}
 	//Check if MB have two or more neighbors
 	for(y=1; y < (h-1); y++) {
-        yw = y*w;
+		yw = y*w;
 		for(x=1; x < (w-1); x++) {
-            size_t cn = 0;
-            yx = yw + x;
+			size_t cn = 0;
+			yx = yw + x;
 			if (md[yx]) {
 				size_t i;
 				for(i=0; i < 8; i++) {
 					if (md[yx + dr[i]]) cn++;
 				}
 				if(cn > 2 && detect_cnt > 10) {
-#if 1
-                    dflog(LOG_INFO, "%s():%u detect_cnt: %d maxi: %d ing: %d Sad_Threshold: %d frame_count: %d",
-                      __func__, __LINE__, detect_cnt, maxi, ing[sz-1], pObj->Sad_Threshold>>8, pObj->frame_count);
+#if 0
+					dflog(LOG_INFO, "%s():%u detect_cnt: %d maxi: %d ing: %d Sad_Threshold: %d frame_count: %d",
+					      __func__, __LINE__, detect_cnt, maxi, ing[sz-1], pObj->Sad_Threshold>>8, pObj->frame_count);
 #endif
 					out_motion_detected(md, sz);
 					return ALG_MOTION_S_DETECT;

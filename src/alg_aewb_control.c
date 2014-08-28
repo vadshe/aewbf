@@ -792,7 +792,7 @@ short ALG_aewbSetOtfCorrect( int level )
 short ALG_aewbSetEdgeEnhancement(EDGE_PARAM  *pParm )
 {
   CSL_IpipeEdgeEnhanceConfig config;
-  static CSL_IpipeEdgeEnhanceConfig prev_config = {0};
+  static CSL_IpipeEdgeEnhanceConfig prev_config;
 
 
 
@@ -968,11 +968,9 @@ short ALG_aewbSetSensorFrameRate(int frame_rate_mode)
 
 short ALG_aewbGetSensorFrameRate(int frame_rate)
 {
-  int FPS = 0;
+  (void)frame_rate;
 
-  FPS = DRV_imgsGetFramerate();
-
-  return FPS;
+  return DRV_imgsGetFramerate();
 }
 
 short ALG_aewbSetAEPriority (int ae_priority)

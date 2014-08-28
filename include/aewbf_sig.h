@@ -12,9 +12,10 @@
 #define BY    0x1d
 #define ALG_SENSOR_BITS (1<<9)
 #define HISTORY 30
-#define ZERO 176 //176 Sony IMX136 zero level
+#define ZERO 174 //176 Sony IMX136 zero level
 #define OFF 0 //30
 #define UP 200
+#define FRAMES_TO_CLOSE_IR 200
 
 
 typedef struct ALG_AewbfObj {
@@ -83,6 +84,7 @@ typedef struct IAEWBF_SIG_Obj {
     int gAePriorityMode, gBWMode, gDayNight, gIRCut, defaultFPS, gFlicker;
     int IRcutClose; //IR-cut 1-close, 0 - open
     int FPShigh; //FPS 1-high, 0 - low
+    int Threshold_IR_cut[2];   //Threshold for Y for closing IR filter and opening it back
 } IAEWBF_SIG_Obj;
 
 
