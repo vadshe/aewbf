@@ -6,8 +6,6 @@
 
 #include <unistd.h> // unlink
 
-#define DFTRACE() dflog(LOG_INFO, "%s():%u", __func__, __LINE__)
-
 
 char md_mask[SIGRAND_MOTION_MASK_CHAR_LENGTH];
 

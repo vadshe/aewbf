@@ -4,6 +4,8 @@
  */
 #include "iaewbf_sig.h"
 
+#include <sc_env.h> //scam
+
 #ifndef AE_SIG_PRIV_
 #define AE_SIG_PRIV_
 
@@ -12,10 +14,10 @@
 #define BY    0x1d
 #define ALG_SENSOR_BITS (1<<9)
 #define HISTORY 30
-#define ZERO 174 //176 Sony IMX136 zero level
+#define ZERO 176 //176 Sony IMX136 zero level
 #define OFF 0 //30
 #define UP 200
-#define FRAMES_TO_CLOSE_IR 200
+#define FRAMES_TO_CLOSE_IR 150
 
 
 typedef struct ALG_AewbfObj {
@@ -62,12 +64,13 @@ typedef struct IAEWBF_SIG_Obj {
     IALG_Obj   alg;            /* MUST be first field of all XDAS algs */
 
     XDAS_UInt32 w, h;               //The width and height of BoxCar image
+    XDAS_UInt32 pix;                //Number pixel per windows
     XDAS_UInt32 hsz;                //Size on BoxCar Histogram
     XDAS_UInt16 *box;               //Pointer to BoxCar image
     IAEWBF_Param Exp;               //Exposure parameters
     IAEWBF_Param Offset;            //Offset
     IAEWBF_Param GIFIF;             //IFIF gain
-    IAEWBF_Param Grgb2rgb;          //Grgb2rgb gain
+    //IAEWBF_Param Grgb2rgb;          //Grgb2rgb gain
     IAEWBF_Param Y;                 //The average Y
     IAEWBF_Param Rgain;             //The ISIF gain for R color
     IAEWBF_Param Bgain;             //The ISIF gain for B color
@@ -75,16 +78,25 @@ typedef struct IAEWBF_SIG_Obj {
     IAEWBF_Param Hmax;              //The maximum of histogram
     XDAS_UInt32 HmaxTh;             //The max of histogram threshold
     XDAS_UInt32 SatTh;              //Saturation Threshold for histogram max and min
-    XDAS_UInt32 FPSmax;             //Maximum FPS
-    XDAS_UInt32 FPScur;             //Current FPS
+    //XDAS_UInt32 FPSmax;             //Maximum FPS
+    //XDAS_UInt32 FPScur;             //Current FPS
     XDAS_UInt32 RGB[3][512];        //Gamma tables for each color
     XDAS_UInt32 HISTTH;             //Minimum offset for down expouse
     XDAS_UInt32 YAE;                //Y value for AE algorithm
-    //Dynamic parametar
-    int gAePriorityMode, gBWMode, gDayNight, gIRCut, defaultFPS, gFlicker;
-    int IRcutClose; //IR-cut 1-close, 0 - open
-    int FPShigh; //FPS 1-high, 0 - low
-    int Threshold_IR_cut[2];   //Threshold for Y for closing IR filter and opening it back
+    
+	//Params previous values
+    int gBWMode;
+	int gIRCut;
+	int defaultFPS;
+    int FPShigh;        //FPS 1-high, 0 - low
+    int IRcutClose;     //IR-cut 1-close, 0 - open
+    int Threshold_IR_cut[3];   //Threshold for Y for closing IR filter and opening it back
+
+	//scam
+	scImgParams_t	scImgParams;
+	scBOOL			scIsAutoCamMode;
+    scBYTE          scCurrentCamMode;
+
 } IAEWBF_SIG_Obj;
 
 
@@ -103,6 +115,12 @@ int Get_BoxCar(IALG_Handle handle);
 void ALG_SIG_config(IALG_Handle handle);
 void SIG2A_applySettings(void);
 int SIG_2A_config(IALG_Handle handle);
+
+//SCAM
+void SC2A_applySettings( void );
+void SCSetSaturation( unsigned char saturation );
+void SCSetSharpness( unsigned char sharpness );
+
 #ifdef __cplusplus
 extern "C" {
 #endif

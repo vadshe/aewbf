@@ -74,6 +74,8 @@ is available and may change based on the boot paramset ID - now in vnf - Revisit
 /* IMAGE_TUNE_AWB_PRM */
 #define IMAGE_TUNE_AWB_PRM                    (0x52)
 
+#define IMAGE_TUNE_TNF3_PRM                   (0x53)
+
 #define IMAGE_TUNE_CMD_MAX                    (0x60)
 
 #define IMAGE_TUNE_PACKET_SIZE_MAX            (142*2*KB) //(128*2*KB)  //    //AwbChange
@@ -106,6 +108,7 @@ typedef struct {
   IMAGE_TUNE_IpipeParams    *pIpipePrm;
   IMAGE_TUNE_LdcParams      *pLdcPrm;
   ALG_vnfParams 			*pVnfPrm;
+  ALG_tnf3Params 			*pTnf3Prm;
   awb_calc_data_t           *pAwbPrm;
 
 } IMAGE_TUNE_Params;
@@ -162,6 +165,9 @@ int IMAGE_TUNE_LoadParams(int paramSetId);
 
 int IMAGE_TUNE_GetVnfParams(ALG_vnfParams *vnfParams);
 int IMAGE_TUNE_SetVnfParams(ALG_vnfParams *vnfParams);
+
+int IMAGE_TUNE_GetTnf3Params(ALG_tnf3Params *tnf3Params);
+int IMAGE_TUNE_SetTnf3Params(ALG_tnf3Params *tnf3Params);
 /* IT */
 int IMAGE_TUNE_GetAwbParams(awb_calc_data_t *awbParams);
 int IMAGE_TUNE_SetAwbParams(awb_calc_data_t *awbParams);
@@ -171,5 +177,8 @@ int IMAGE_TUNE_SetSendYuvData(int val);
 int IMAGE_TUNE_CmdDataSendSetUp(int headerSize, int dSize, Uint8 *headerData, Uint8 *ImgData);
 int IMAGE_TUNE_CmdDataSend(IMAGE_TUNE_CmdInfo *statusInfo);
 int IMAGE_TUNE_CopyImageData(int hSize, int dSize, Uint8 *headerData, Uint8 *ImgData);
+
+int IMAGE_TUNE_ReadParamset(int value);
+int IMAGE_TUNE_SaveParamSetList(IMAGE_TUNE_ParamSet *prm, int pID);
 
 #endif /* _IMAGE_TUNE_H_ */

@@ -120,6 +120,8 @@ typedef struct {
 
 }ALG_AewbData_ITTAwb;
 
+extern int lowlight;
+
 void *ALG_aewbCreate(ALG_AewbCreate *create);
 int ALG_aewbRun(void *hndl, ALG_AewbRunPrm *prm, ALG_AewbStatus *status);
 int ALG_aewbDelete(void *hndl);

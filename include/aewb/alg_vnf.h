@@ -11,11 +11,33 @@
 #define ALG_VNF_MODE_ONLY_KNF      (2)
 #define ALG_VNF_MODE_KNF_TNF       (3)
 #define ALG_VNF_MODE_KTNF          (4)
+#define ALG_VNF_MODE_FAST_TNF      (5)
+#define ALG_VNF_MODE_TNF3          (6)
+#define ALG_VNF_MODE_ONLY_TNF3     (7)
+
+#ifdef TNF3_MODE_ON
+#define DEFAULT_VNF_MODE           (ALG_VNF_MODE_TNF3)
+#define DEFAULT_VNF_MODE_ONLY_TNF  (ALG_VNF_MODE_ONLY_TNF3)
+#define DEFAULT_VNF_MODE_ONLY_SNF  (ALG_VNF_MODE_ONLY_KNF)
+#define DEFAULT_VNF_MODE_OFF       (ALG_VNF_MODE_NO_NF)
+#else
+#define DEFAULT_VNF_MODE           (ALG_VNF_MODE_KTNF)
+#define DEFAULT_VNF_MODE_ONLY_TNF  (ALG_VNF_MODE_ONLY_TNF)
+#define DEFAULT_VNF_MODE_ONLY_SNF  (ALG_VNF_MODE_ONLY_KNF)
+#define DEFAULT_VNF_MODE_OFF       (ALG_VNF_MODE_NO_NF)
+#endif
 
 typedef enum{
 	SNF_DEFAULT = 0,
 	SNF_CUSTOM
 } SNF_STRENGTH_MODE;
+
+typedef enum{
+	TNF_AUTO = 0,
+	TNF_LOW,
+	TNF_MED,
+	TNF_HIGH
+} TNF_STRENGTH_MODE;
 
 typedef struct {
 
@@ -59,6 +81,17 @@ typedef struct {
 
 } ALG_vnfParams;
 
+typedef struct
+{
+  //Place holder for the TNF3 Parameters
+  Int32 tnf3TS;              // TS used by NFS2 operating on Diff Downsampled image in TNF3
+  Int32 unDiffScaleFactor;   //[TNF3] Same variable is used for the boosting the differential image precision in case of TNF3.
+                                      //This vairiable is same as variable q used in the Ref implementation/slides
+  Int32 unMotionThreshold;   //Threshold for maximum allowed motion component, if motion exceeds this threshold then the
+                                      //temporal filtered frame would be same as current frame
+  Int32 unStrengthOfTNF3;    //values of the strength of Blending of TNF3
+}ALG_tnf3Params;
+
 typedef struct {
 
   Uint16  dataFormat;   // only YUV420 supported
@@ -72,6 +105,7 @@ typedef struct {
   Uint16 snfStrength;
 
   ALG_vnfParams *pVnfParams;  // if NULL, default values will be used
+  ALG_tnf3Params *pTnf3Params;
   Uint32  sysBaseAddr;
 
 } ALG_VnfCreate;
@@ -82,6 +116,7 @@ typedef struct {
   Uint16  outHeight;
   Uint16  outStartX;
   Uint16  outStartY;
+  Uint16  outPitch;
 
 } ALG_VnfStatus;
 
@@ -94,6 +129,8 @@ typedef struct {
   Uint16  inStartY;
 
   Uint16  mode;
+  Uint16  strength;
+  Uint16  strUpdate;
 
   ALG_vnfParams *pVnfParams; // if NULL, previously set values are applied
 

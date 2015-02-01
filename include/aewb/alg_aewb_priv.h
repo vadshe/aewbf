@@ -58,7 +58,7 @@ short ALG_aewbSetZoom(int IsZoom);
 short ALG_aewbSetNDShutterOnOff(int bIsDay);
 short ALG_aewbSetSensorGain(int gain);
 short ALG_aewbSetSensorExposure(int shutter);
-short ALG_aewbSetIpipeWb(AWB_PARAM  *pAwb_Data, int DGainEnable, int lowlight);
+short ALG_aewbSetIpipeWb(AWB_PARAM  *pAwb_Data );
 short ALG_aewbSetIpipeWb2(AWB_PARAM  *pAwb_Data );
 short ALG_aewbSetSensorDcsub(int dcsub);
 short ALG_aewbSetSensorBin(int bin);
@@ -75,7 +75,6 @@ short ALG_aewbSetAEPriority (int ae_priority);
 short ALG_aewbAFEnable  (int af_enable);
 
 short ALG_aewbSetAEPriorityMode (int ae_priority_mode);
-
 
 #endif /* _ALG_AEWB_PRIV_H_ */
 

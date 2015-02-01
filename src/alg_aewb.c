@@ -19,6 +19,8 @@
 #include "iaewbf_sig.h"
 
 
+#include <sc_env.h> //SCAM
+
 AEW_EXT_PARAM Aew_ext_parameter;
 extern AWB_OUTPUT_DATA      gOutAWBData;
 extern int gFlicker;
@@ -52,13 +54,13 @@ void ALG_aewbConvert_RGB_YUV(IAEWB_Rgb *rgbData, int pix_in_pax, int awb_h3a_pax
 static int aewbFrames = 0;
 static int flicker_detect_complete = 0;
 //static int *g_flickerMem = NULL; //algorithm persistent memory
-static IAEWB_Rgb *rgbData = NULL;
+IAEWB_Rgb *rgbData = NULL;
 //--- for Y buffer - temorary
 static unsigned int *YDataBuff = NULL;
 static unsigned int YDataBuffV;
 static unsigned int YDataBuffH;
 //---
-static aewDataEntry *aew_data = NULL;
+aewDataEntry *aew_data = NULL;
 static int sensorGain = 1000;
 static int sensorExposure = 8333;
 static int env_50_60Hz = -1;
@@ -74,7 +76,7 @@ static unsigned int HISTgain_mid = 256;
 static unsigned int HISTgain_minmax = 256;
 static unsigned int HISTmin = 0;
 static unsigned int HISTmode = 2;
-static int lowlight = 0;
+int lowlight = 0;
 static int sensorExposureMax = 33333;
 static int HighGain = 0;
 static int OV271X_gain = 0;
@@ -175,6 +177,31 @@ int ALG_aewbCheckAutoIris(void)
 	}
 }
 
+//scam
+void initScImgParams( scImgParams_t* params )
+{
+	params->brightness	=	128;
+	params->contrast	=	128;
+	params->sharpness	=	128;
+	params->saturation	=	128;
+
+	params->fdMode		=	SCFdDisabled;
+
+	params->wbMode		=	SCWbAuto;
+    //params->gainR		=	512;
+    //params->gainB		=	512;
+	params->expMode		=	SCExpAuto;
+	params->shutter		=	10000;
+	params->shutterScope.min	=	1;
+	params->shutterScope.max	=	200000;
+    params->gainScope.min		=	512;
+    params->gainScope.max		=	8191;
+    params->RgainScope.min      =   50;
+    params->RgainScope.max      =   4095;
+    params->BgainScope.min      =   50;
+    params->BgainScope.max      =   4095;
+ }
+
 void *ALG_aewbCreate(ALG_AewbCreate *create)
 {
   IAE_Params aeParams;
@@ -222,7 +249,7 @@ void *ALG_aewbCreate(ALG_AewbCreate *create)
 
   Aew_ext_parameter.GAIN_SETUP            = ALG_aewbSetSensorGain        ;
   Aew_ext_parameter.SHUTTER_SETUP         = ALG_aewbSetSensorExposure    ;
-  Aew_ext_parameter.AWB_SETUP             = (void*)ALG_aewbSetIpipeWb    ;
+  Aew_ext_parameter.AWB_SETUP             = ALG_aewbSetIpipeWb           ;
   Aew_ext_parameter.DCSUB_SETUP           = ALG_aewbSetSensorDcsub       ;
   Aew_ext_parameter.BIN_SETUP             = ALG_aewbSetSensorBin         ;
   Aew_ext_parameter.RGB2RGB_SETUP         = ALG_aewbSetRgb2Rgb           ;
@@ -252,6 +279,15 @@ void *ALG_aewbCreate(ALG_AewbCreate *create)
   Aew_ext_parameter.aew_enable        = AEW_ENABLE;
   Aew_ext_parameter.binning_mode      = create->aewbBinEnable?SENSOR_BINNING:SENSOR_SKIP;
   Aew_ext_parameter.NFGain            = 0;
+
+  //scam
+  initScImgParams( &(Aew_ext_parameter.scImgParams[ SCCamModePreview ]) );
+  initScImgParams( &(Aew_ext_parameter.scImgParams[ SCCamModeDay ]) );
+  initScImgParams( &(Aew_ext_parameter.scImgParams[ SCCamModeNight ]) );
+  Aew_ext_parameter.scCurrentCamMode = SCCamModePreview;
+  Aew_ext_parameter.scIsAutoCamMode  = 0;
+  //////////////////
+
 
   gITTAwb.awbNumWinH = create->pH3aInfo->aewbNumWinH;
   gITTAwb.awbNumWinV = create->pH3aInfo->aewbNumWinV;
@@ -422,52 +458,44 @@ void *ALG_aewbCreate(ALG_AewbCreate *create)
 	  }
 
 	  /* setup initial ipipe gains */
-	  ALG_aewbSetIpipeWb(&ipipe_awb_gain, gALG_aewbObj.DGainEnable, lowlight);
+	  ALG_aewbSetIpipeWb(&ipipe_awb_gain);
 	  ALG_aewbSetSensorDcsub(172);
 	  ALG_aewbSetSensorGain(sensorGain);
 	  TI_2A_SetEEValues(create->shiftValue);
   }
   else if(create->aewbVendor == ALG_AEWB_ID_SIG) {
-      //memset(&gSIG_Obj, 0, sizeof(gSIG_Obj));
+      TI_2A_init_tables(create->pH3aInfo->aewbNumWinH, create->pH3aInfo->aewbNumWinV);
+       //Initial AE
+       gALG_aewbObj.weight = TI_WEIGHTING_MATRIX;
+       gALG_aewbObj.IAEWB_StatMatdata.winCtVert  = create->pH3aInfo->aewbNumWinV;
+       gALG_aewbObj.IAEWB_StatMatdata.winCtHorz  = create->pH3aInfo->aewbNumWinH;
+       gALG_aewbObj.IAEWB_StatMatdata.pixCtWin   = create->pH3aInfo->aewbNumSamplesPerColorInWin;
 
-      /*
-      gSIG_Obj.sensorMode	= (create->sensorMode & 0xFF);
-      gSIG_Obj.vsEnable		= (create->sensorMode & DRV_IMGS_SENSOR_MODE_VSTAB) ? 1 : 0;
-      gSIG_Obj.aewbVendor	= create->aewbVendor;
-      gSIG_Obj.reduceShutter	= create->reduceShutter;
-      gSIG_Obj.saldre		= create->saldre;
-      gSIG_Obj.AGainEnable      = create->AGainEnable;
-      gSIG_Obj.DGainEnable      = create->DGainEnable;
-      gSIG_Obj.ALTM		= create->ALTM;
-      gSIG_Obj.sensorFps	= create->sensorFps;
-      gSIG_Obj.numEncodes	= create->numEncodes;
-      gSIG_Obj.afEnable		= create->afEnable;
-      */
-      aewbfParams.size = sizeof(aewbfParams);
-      aewbfParams.numHistory = 10;
-      aewbfParams.numSmoothSteps = 1;
+       aewbfParams.size = sizeof(aewbfParams);
+       aewbfParams.numHistory = 10;
+       aewbfParams.numSmoothSteps = 1;
 
 
-      numMem = IAEWBF_SIG.ialg.algAlloc((IALG_Params *)&aewbfParams, NULL, gSIG_Obj.memTab_aewbf);
-      while(numMem > 0){
-          gSIG_Obj.memTab_aewbf[numMem-1].base = malloc(gSIG_Obj.memTab_aewbf[numMem-1].size);
-          numMem --;
-      }
+       numMem = IAEWBF_SIG.ialg.algAlloc((IALG_Params *)&aewbfParams, NULL, gSIG_Obj.memTab_aewbf);
+       while(numMem > 0){
+           gSIG_Obj.memTab_aewbf[numMem-1].base = malloc(gSIG_Obj.memTab_aewbf[numMem-1].size);
+           numMem --;
+       }
 
-      gSIG_Obj.handle_aewbf = (IALG_Handle)gSIG_Obj.memTab_aewbf[0].base;
-      retval = IAEWBF_SIG.ialg.algInit(gSIG_Obj.handle_aewbf, gSIG_Obj.memTab_aewbf, NULL, (IALG_Params *)&aewbfParams);
-      if(retval == -1) {
-          OSA_ERROR("AE_SIG_AE.ialg.algInit()\n");
-          return NULL;
-      }
+       gSIG_Obj.handle_aewbf = (IALG_Handle)gSIG_Obj.memTab_aewbf[0].base;
+       retval = IAEWBF_SIG.ialg.algInit(gSIG_Obj.handle_aewbf, gSIG_Obj.memTab_aewbf, NULL, (IALG_Params *)&aewbfParams);
+       if(retval == -1) {
+           OSA_ERROR("AE_SIG_AE.ialg.algInit()\n");
+           return NULL;
+       }
 
-      retval = SIG_2A_config(gSIG_Obj.handle_aewbf);
-      if(retval == -1) {
-          OSA_ERROR("ERROR: SIG_2A_config\n");
-          return NULL;
-      }
+       retval = SIG_2A_config(gSIG_Obj.handle_aewbf);
+       if(retval == -1) {
+           OSA_ERROR("ERROR: SIG_2A_config\n");
+           return NULL;
+       }
 
-       return &gSIG_Obj;
+        return &gSIG_Obj;
   }
 
   return &gALG_aewbObj;
@@ -504,24 +532,24 @@ int TI_2A_config(int flicker_detection, int saldre)
     /* set stepSize based on input from Flicker detectiom and PAL/NTSC environment */
     /*if(flicker_detection == 1)
     {
-    if(Aew_ext_parameter.env_50_60Hz == VIDEO_NTSC)
-        stepSize = 8333;
-    else
-        stepSize = 10000;
+	if(Aew_ext_parameter.env_50_60Hz == VIDEO_NTSC)
+	    stepSize = 8333;
+	else
+	    stepSize = 10000;
     }
     else
     {
-    stepSize = 1;
+	stepSize = 1;
 #ifdef FD_DEBUG_MSG
-    OSA_printf("stepSize = 1\n");
+	OSA_printf("stepSize = 1\n");
 #endif
     }
 
     if(gFlicker == VIDEO_NTSC && flicker_detection == 3){
-    stepSize = (8333*gALG_aewbObj.reduceShutter)/100;
+	stepSize = (8333*gALG_aewbObj.reduceShutter)/100;
     }
     else if(gFlicker == VIDEO_PAL && flicker_detection == 2){
-    stepSize = 10000;
+	stepSize = 10000;
     }*/
 
     lowlight = DRV_imgsGetAEPriority();
@@ -766,7 +794,7 @@ int TI_2A_config(int flicker_detection, int saldre)
     return 0;
 }
 
-static void GETTING_RGB_BLOCK_VALUE(unsigned short * BLOCK_DATA_ADDR,IAEWB_Rgb *rgbData, aewDataEntry *aew_data, int shift)
+void GETTING_RGB_BLOCK_VALUE(unsigned short * BLOCK_DATA_ADDR,IAEWB_Rgb *rgbData, aewDataEntry *aew_data, int shift)
 {
   unsigned short i,j,k, numWin, idx1, idx2;
   Uint8 *curAewbAddr;
@@ -832,7 +860,7 @@ static void GETTING_RGB_BLOCK_VALUE(unsigned short * BLOCK_DATA_ADDR,IAEWB_Rgb *
   accValue[3] /= numWin*gALG_aewbObj.IAEWB_StatMatdata.pixCtWin;
 
   #ifdef ALG_AEWB_DEBUG
-  OSA_printf(" AEWB: Avg Color: %5d, %5d, %5d, %5d\n", accValue[0], accValue[1], accValue[2], accValue[3]);
+  //OSA_printf(" AEWB: Avg Color: %5d, %5d, %5d, %5d\n", accValue[0], accValue[1], accValue[2], accValue[3]);
   #endif
 }
 
@@ -1204,7 +1232,6 @@ void TI2AFunc(void *pAddr)
     float FD_brightness_cur;
     float FD_brightness_next;
     int AE_customdata;
-    //Uint16 *box;
 
     GETTING_RGB_BLOCK_VALUE(pAddr, rgbData, aew_data, 2);
 
@@ -1334,14 +1361,17 @@ void TI2AFunc(void *pAddr)
 void SIG2AFunc(void *pAddr)
 {
     (void)pAddr;
+    gOutAWBData.NFGain = Aew_ext_parameter.NFGain;
     static const size_t leave_frames = 5;
     if ((Aew_ext_parameter.aew_enable == AEW_ENABLE) ) {
-        if(gSIG_Obj.aewbType == ALG_AEWB_AE || gSIG_Obj.aewbType == ALG_AEWB_AEWB){
-            if(!(aewbFrames%leave_frames)  && aewbFrames > 4){
-                if (Get_BoxCar(gSIG_Obj.handle_aewbf) == OSA_SOK)
-		    IAEWBF_SIG.process((IAEWBF_Handle)gSIG_Obj.handle_aewbf, &gSIG_Obj.InArgs, &gSIG_Obj.OutArgs);
+        if(gSIG_Obj.aewbType == ALG_AEWB_AE || gSIG_Obj.aewbType == ALG_AEWB_AEWB) {
+            if(!(aewbFrames%leave_frames) && aewbFrames > 4) {
+                GETTING_RGB_BLOCK_VALUE(pAddr, rgbData, aew_data, 0);
+                IAEWBF_SIG.process((IAEWBF_Handle)gSIG_Obj.handle_aewbf, &gSIG_Obj.InArgs, &gSIG_Obj.OutArgs);
             }
-            if(aewbFrames > 4) SIG2A_applySettings();
+           
+			if(aewbFrames > 4) 
+				SC2A_applySettings(); //scam modified settings
         }
     }
     aewbFrames++;
@@ -1428,7 +1458,7 @@ void TI2A_applySettings(IAEWB_Ae *curAe, IAEWB_Ae *nextAe, int numSmoothSteps, i
 
   Auto_Flicker_Control();   // disable flicker control if too bright
 
-  ALG_aewbSetIpipeWb(&ipipe_awb_gain, gALG_aewbObj.DGainEnable, lowlight);
+  ALG_aewbSetIpipeWb(&ipipe_awb_gain);
   ALG_aewbSetSensorExposure(sensorExposure);
   if (gALG_aewbObj.AGainEnable)
   {
@@ -1447,7 +1477,6 @@ void Appro3AFunc(void *pAddr)
   CONTROL3AS Appro_Control3A;
   static int firstApproflg = 1;
   static IAWB_InArgs   AWB_InArgs;
-  //static IAWB_OutArgs  AWB_OutArgs;
 
   if( firstApproflg )
   {
