@@ -78,7 +78,7 @@ int Get_BoxCar(IALG_Handle handle)
 
     return OSA_SOK;
 }
-
+/*
 void setup_color_matrix_sensor(CSL_IpipeRgb2RgbConfig *rgb2rgb2, const char *sensor)
 {
     if (strcmp(sensor, "MICRON_MT9M034_720P") == 0)
@@ -168,106 +168,7 @@ void setup_color_matrix_value(CSL_IpipeRgb2RgbConfig *rgb2rgb2, int value)
     if(DRV_ipipeSetRgb2Rgb2(rgb2rgb2) != CSL_SOK)
         OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
 }
-
-void ALG_SIG_config(IALG_Handle handle)
-{
-    IAEWBF_SIG_Obj *hn = (IAEWBF_SIG_Obj *)handle;
-    char zoomvalue[4];
-    int j;
-    size_t i;
-    Uint32 hsz = ALG_SENSOR_BITS;
-    BRT_CRT_PARAM brtCtrParam;
-    hn->w = gALG_aewbObj.IAEWB_StatMatdata.winCtHorz;
-    hn->h = gALG_aewbObj.IAEWB_StatMatdata.winCtVert;
-    hn->pix = gALG_aewbObj.IAEWB_StatMatdata.pixCtWin;
-    hn->SatTh = hn->w*hn->h*3/100;
-
-    brtCtrParam.yuv_adj_ctr = Aew_ext_parameter.contrast >> 3;
-    brtCtrParam.yuv_adj_brt = Aew_ext_parameter.brightness;
-
-
-    //Uint32 tables[512];
-    CSL_IpipeGammaConfig dataG;
-    CSL_IpipeRgb2RgbConfig rgb2rgb1, rgb2rgb2;
-    DRV_IpipeWb ipipeWb;
-
-    //if(defaultFPS != DRV_imgsGetFramerate()) {
-    //    defaultFPS = DRV_imgsGetFramerate();
-    //    hn->FPScur = defaultFPS;
-    //    hn->FPSmax = defaultFPS;
-    //}
-
-    hn->HISTTH = 20;
-
-    //Zoom in 0 position
-    sprintf(zoomvalue, "%04d", 0);
-    if(OSA_fileWriteFile("/var/run/zoom", zoomvalue, sizeof(zoomvalue)) !=OSA_SOK) {
-        OSA_printf("AF: error write in file\n");
-    }
-
-    //if(raw) ALG_aewbSetSensorDcsub(0); //176
-    //else ALG_aewbSetSensorDcsub(ZERO);
-    DRV_isifSetDcSub(-ZERO);
-
-    //Config gamma correction tables
-    dataG.tableSize = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SIZE_512;
-    dataG.tableSrc  = CSL_IPIPE_GAMMA_CORRECTION_TABLE_SELECT_RAM;
-    dataG.bypassR = 0;
-    dataG.bypassG = dataG.bypassR;
-    dataG.bypassB = dataG.bypassR;
-    dataG.tableR = gamma002; //gam04; //gam03; // //gamma_ti1; //gamma01; //gamma005//gamma42; //gamma_hdr011; //gamma_hdr01; //gamma01; //gamma00520
-    dataG.tableG = dataG.tableR;
-    dataG.tableB = dataG.tableR;
-
-    //Liner gamma tables
-    /*
-    vl0 = 0;
-    for(i=0; i < 512; i++){
-        vl1 = i<<1;
-        tables[i] = (vl0<<10) | (vl1 - vl0);
-        vl0 = vl1;
-    }
-    */
-    if(CSL_ipipeSetGammaConfig(&gCSL_ipipeHndl, &dataG) != CSL_SOK)
-        OSA_ERROR("Fail CSL_ipipeSetGammaConfig!!!\n");
-
-    //Config RGB2RGB matrix
-    rgb2rgb1.matrix[0][0] = 256;
-    rgb2rgb1.matrix[0][1] = 0;
-    rgb2rgb1.matrix[0][2] = 0;
-
-    rgb2rgb1.matrix[1][0] = 0;
-    rgb2rgb1.matrix[1][1] = 256;
-    rgb2rgb1.matrix[1][2] = 0;
-
-    rgb2rgb1.matrix[2][0] = 0;
-    rgb2rgb1.matrix[2][1] = 0;
-    rgb2rgb1.matrix[2][2] = 256;
-
-    rgb2rgb1.offset[0]    = 0;
-    rgb2rgb1.offset[1]    = 0;
-    rgb2rgb1.offset[2]    = 0;
-
-    setup_color_matrix_sensor(&rgb2rgb2, DRV_imgsGetImagerName());
-
-   //SCAM
-   // if(DRV_ipipeSetRgb2Rgb(&rgb2rgb1) != CSL_SOK)
-   //     OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
-    if(DRV_ipipeSetRgb2Rgb2(&rgb2rgb2) != CSL_SOK)
-        OSA_ERROR("Fail DRV_ipipeSetRgb2Rgb2!!!\n");
-
-    //Config isif white balance gain
-    DRV_isifSetDgain(512, hn->Rgain.New, hn->Bgain.New, 512, 0);
-
-    //Config ipipe gains and offset
-    ipipeWb.gainR  = hn->GIFIF.New;
-    ipipeWb.gainGr = hn->GIFIF.New;
-    ipipeWb.gainGb = hn->GIFIF.New;
-    ipipeWb.gainB  = hn->GIFIF.New;
-
-    DRV_ipipeSetWbOffset(0);
-    DRV_ipipeSetWb(&ipipeWb);
-}
+*/
 
 #if 1 // unused
 static void print_debug(int frames, int leave_frames, IAEWBF_SIG_Obj *hn){
@@ -337,7 +238,7 @@ int SIG_2A_config(IALG_Handle handle)
 
     //Exposure setup
     hn->Exp.Step = 1;
-    hn->Exp.Old = 1000000/defaultFPS;
+    hn->Exp.Old = 1000000/defaultFPS-1;
     hn->Exp.New = 1000000/defaultFPS;
     hn->Exp.Range.max = pScParams->shutterScope.max;
     hn->Exp.Range.min = pScParams->shutterScope.min;
@@ -382,10 +283,12 @@ int SIG_2A_config(IALG_Handle handle)
     hn->SatTh = hn->w*hn->h*3/100;
 
     //Setup IR-cut and BW mode
-    hn->gIRCut			= gIRCut;
-    hn->gBWMode			= gBWMode;
-    hn->IRcutClose		= IRcutClose; //IR-cut 1-open, 0 - close
-    DRV_imgsNDShutter( gIRCut, gBWMode );
+    //hn->gIRCut			= gIRCut;
+    //hn->gBWMode			= gBWMode;
+    hn->gIRCut			= gIRCut; //pScParams->ircutOpen;
+    hn->gBWMode			= gBWMode; //pScParams->bwMode;
+    hn->IRcutClose		= IRcutClose;   //Signal for close or open IR-cut
+    DRV_imgsNDShutter(gIRCut, gBWMode);
 
     hn->Threshold_IR_cut[0] = 30; //Threshold_IR_cut_open;
     hn->Threshold_IR_cut[1] = 30; //Threshold_IR_cut_open;
@@ -564,19 +467,32 @@ void SCSetSharpness( unsigned char sharpness )
     DRV_ipipeSetEdgeEnhance(&config);
 }
 
-void copy_parameters(const scImgParams_t* pScParams, IAEWBF_SIG_Obj *hn)
+void copy_parameters(scImgParams_t* pScParams, IAEWBF_SIG_Obj *hn)
 {
+    pScParams->shutterScope.min	=	1;
+    pScParams->shutterScope.max	=	1000000/defaultFPS;
+    pScParams->gainScope.min		=	512;
+    pScParams->gainScope.max		=	8191;
+    pScParams->RgainScope.min      =   50;
+    pScParams->RgainScope.max      =   4095;
+    pScParams->BgainScope.min      =   50;
+    pScParams->BgainScope.max      =   4095;
+
+
     hn->GIFIF.Range.min = pScParams->gainScope.min;
     hn->GIFIF.Range.max = pScParams->gainScope.max;
     hn->Rgain.Range.min = pScParams->RgainScope.min;
     hn->Rgain.Range.max = pScParams->RgainScope.max;
     hn->Bgain.Range.min = pScParams->BgainScope.min;
     hn->Bgain.Range.max = pScParams->BgainScope.max;
+    hn->Exp.Range.min =  pScParams->shutterScope.min;
+    hn->Exp.Range.max =  pScParams->shutterScope.max;
 
     check_range(&hn->Offset);
     check_range(&hn->GIFIF);
     check_range(&hn->Rgain);
     check_range(&hn->Bgain);
+    check_range(&hn->Exp);
 }
 
 
@@ -586,51 +502,26 @@ void SC2A_applySettings(void)
 	IAEWBF_SIG_Obj *hn = (IAEWBF_SIG_Obj *)gSIG_Obj.handle_aewbf;
 	DRV_IpipeWb ipipeWb;
     CSL_IpipeRgb2RgbConfig rgb2rgb, rgb2rgb2;
-    const scImgParams_t* pScParams;
+    scImgParams_t* pScParams;
 
   
 	int fr = sFrames % leave_frames;
-    int shutterValToSet = -1;
+    //int shutterValToSet = -1;
 
-    //Change day/night auto
-    /*
-    if( Aew_ext_parameter.scIsAutoCamMode && (Aew_ext_parameter.scCurrentCamMode != SCCamModePreview) ) {
-        if( (FPShigh != hn->FPShigh) || (Aew_ext_parameter.scIsAutoCamMode != hn->scIsAutoCamMode) ) {
-            if( FPShigh == 0 ) // NIGHT
-                Aew_ext_parameter.scCurrentCamMode = SCCamModeNight;
-            else
-                Aew_ext_parameter.scCurrentCamMode = SCCamModeDay;
-        }
-    }
-    */
-    ////////////////////////////////////
-    //pScParams = &(Aew_ext_parameter.scImgParams[ Aew_ext_parameter.scCurrentCamMode ]); //scam
-    ////////////////////////////////////
-
-    //copy_parameters(pScParams, hn);
 
     Aew_ext_parameter.scCurrentCamMode = SCCamModeNight;
-    if( Aew_ext_parameter.scIsAutoCamMode)
-     {
-         if(FPShigh != hn->FPShigh) {
-             if( FPShigh == 0 )  Aew_ext_parameter.scCurrentCamMode = SCCamModeNight;
-             else                Aew_ext_parameter.scCurrentCamMode = SCCamModeDay;
-             pScParams = &(Aew_ext_parameter.scImgParams[Aew_ext_parameter.scCurrentCamMode]);
-             hn->scCurrentCamMode = Aew_ext_parameter.scCurrentCamMode;
-             copy_parameters(pScParams, hn);
-             hn->FPShigh = FPShigh;
-         }
-     }
-     else if(Aew_ext_parameter.scCurrentCamMode != hn->scCurrentCamMode)
-     {
-         pScParams = &(Aew_ext_parameter.scImgParams[Aew_ext_parameter.scCurrentCamMode]);
-         hn->scCurrentCamMode = Aew_ext_parameter.scCurrentCamMode;
-         copy_parameters(pScParams, hn);
 
-     } else {
-         pScParams = &(Aew_ext_parameter.scImgParams[Aew_ext_parameter.scCurrentCamMode]);
-         copy_parameters(pScParams, hn);
-     }
+    //Change day/night auto
+    if( Aew_ext_parameter.scIsAutoCamMode && Aew_ext_parameter.scCurrentCamMode != SCCamModePreview)
+    {
+        if( FPShigh == 0 )  Aew_ext_parameter.scCurrentCamMode = SCCamModeNight;
+        else                Aew_ext_parameter.scCurrentCamMode = SCCamModeDay;
+        pScParams = &(Aew_ext_parameter.scImgParams[Aew_ext_parameter.scCurrentCamMode]);
+        copy_parameters(pScParams, hn);
+    }
+
+    pScParams = &(Aew_ext_parameter.scImgParams[Aew_ext_parameter.scCurrentCamMode]);
+    copy_parameters(pScParams, hn);
 
     print_debug( sFrames, leave_frames, hn );
 
@@ -657,6 +548,58 @@ void SC2A_applySettings(void)
         DRV_isifSetDgain(512 , hn->Rgain.Old, hn->Bgain.Old, 512, 0);
     }
 
+    //Change Expouse
+    if(pScParams->fdMode == SCFdDisabled){
+        if( hn->Exp.New != hn->Exp.Old )
+        {
+            smooth_change(&hn->Exp, fr);
+            int fpsNew = 1000000/hn->Exp.Old;
+            if(fpsNew < defaultFPS)
+            {
+                DRV_imgsSetFramerate(fpsNew);
+                defaultFPS = fpsNew;
+            }
+            DRV_imgsSetEshutter(hn->Exp.Old, 0);
+        }
+    }
+    else if(pScParams->fdMode == SCFd50hz)
+    {
+        hn->Exp.New = (50/defaultFPS)*20000;
+        hn->Exp.Old = hn->Exp.New;
+        DRV_imgsSetEshutter(hn->Exp.Old, 0);
+    }
+    else if(pScParams->fdMode == SCFd50hz)
+    {
+        hn->Exp.New = (60/defaultFPS)*16667;
+        hn->Exp.Old = hn->Exp.New;
+        DRV_imgsSetEshutter(hn->Exp.Old, 0);
+    }
+
+    //Thresholds dynamic change
+    if( Threshold_IR_cut_open != hn->Threshold_IR_cut[0] ) {
+        hn->Threshold_IR_cut[0] = 30; //Threshold_IR_cut_open;
+        hn->Threshold_IR_cut[1] = 30; //Threshold_IR_cut_open;
+    }
+
+    //BW and color night mode dynamic change and IR-cut dynamic change
+    if(IRcutClose != hn->IRcutClose)
+    {
+        if(IRcutClose == 0)
+        {
+            if( pScParams->bwMode != hn->gBWMode ||  pScParams->ircutOpen != hn->gIRCut)
+            {
+                DRV_imgsNDShutter( pScParams->ircutOpen,  pScParams->bwMode);
+                hn->gBWMode = pScParams->bwMode;
+                hn->gIRCut = pScParams->ircutOpen;
+            }
+        }
+        else
+        {
+            DRV_imgsNDShutter(0, 0);
+        }
+        hn->IRcutClose = IRcutClose;
+    }
+    /*
 	if( pScParams->expMode != SCExpManual ) //scam
 	{
 		//IR-cut dynamic change
@@ -678,12 +621,6 @@ void SC2A_applySettings(void)
 		    hn->gBWMode = gBWMode;
 		}
 
-		//Thresholds dynamic change
-		if( Threshold_IR_cut_open != hn->Threshold_IR_cut[0] ) {
-            hn->Threshold_IR_cut[0] = 30; //Threshold_IR_cut_open;
-            hn->Threshold_IR_cut[1] = 30; //Threshold_IR_cut_open;
-		}
-
 		//Change IR-cut
 		if( IRcutClose != hn->IRcutClose ) {
 		    DRV_imgsNDShutter(IRcutClose, gBWMode);
@@ -698,7 +635,7 @@ void SC2A_applySettings(void)
 	}
 
 	//////////////////////////////////////////
-	// Exp min max set
+    // Exp min max set
 	if( (pScParams->expMode != hn->scImgParams.expMode) || (pScParams->shutter != hn->scImgParams.shutter) )
 	{
 		OSA_printf(">>>=== SCAM: EXPMODE || SHUTTER changed (EXP: %d->%d, SHUTTER: %d->%d)\n", 
@@ -724,7 +661,7 @@ void SC2A_applySettings(void)
 			hn->Exp.Range.min = hn->Exp.Step;
 			hn->Exp.Range.max = 33333; // 1/30
 		}
-	}
+    }
 	//////////////////////////////////////////
 	//////////////////////////////////////////
 
@@ -779,13 +716,7 @@ void SC2A_applySettings(void)
 		DRV_imgsSetEshutter(shutterValToSet, 0);
         hn->FPShigh = FPShigh;
 	}
-	//////////////////////////////////////////
-	//////////////////////////////////////////
-
-	//////////////////////////////////////////
-	//////////////////////////////////////////
-	//////////////////////////////////////////
-
+    */
 
     //Config RGB2RGB matrix for more gain
     /*

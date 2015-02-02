@@ -191,9 +191,9 @@ void initScImgParams( scImgParams_t* params )
     //params->gainR		=	512;
     //params->gainB		=	512;
 	params->expMode		=	SCExpAuto;
-	params->shutter		=	10000;
+    params->shutter		=	10000;
 	params->shutterScope.min	=	1;
-	params->shutterScope.max	=	200000;
+    params->shutterScope.max	=	1000000/30;
     params->gainScope.min		=	512;
     params->gainScope.max		=	8191;
     params->RgainScope.min      =   50;

@@ -163,11 +163,6 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
     size_t i, j;
     //const Uint16 w = hn->w, h = hn->h;
     Int32 w, h, sz, sz4;
-    //Uint32 cn = 0;
-    //const size_t sz  =  w*h;
-    //const size_t sz4 = sz*4;
-    //const size_t sz3 = sz*3;
-    //const size_t sz2 = sz3>>1;
     Uint16 r=0, g=0, b=0;
     Uint32 Y=0; // must be 32 bits
     static const size_t ns = 3;
@@ -283,27 +278,27 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
         bw++;
 
         //Check range
-        hn->Rgain.New = hn->Rgain.New > hn->Rgain.Range.max ? hn->Rgain.Range.max : hn->Rgain.New;
-        hn->Rgain.New = hn->Rgain.New < hn->Rgain.Range.min ? hn->Rgain.Range.min : hn->Rgain.New;
-        hn->Bgain.New = hn->Bgain.New > hn->Bgain.Range.max ? hn->Bgain.Range.max : hn->Bgain.New;
-        hn->Bgain.New = hn->Bgain.New < hn->Bgain.Range.min ? hn->Bgain.Range.min : hn->Bgain.New;
+        //hn->Rgain.New = hn->Rgain.New > hn->Rgain.Range.max ? hn->Rgain.Range.max : hn->Rgain.New;
+        //hn->Rgain.New = hn->Rgain.New < hn->Rgain.Range.min ? hn->Rgain.Range.min : hn->Rgain.New;
+        //hn->Bgain.New = hn->Bgain.New > hn->Bgain.Range.max ? hn->Bgain.Range.max : hn->Bgain.New;
+        //hn->Bgain.New = hn->Bgain.New < hn->Bgain.Range.min ? hn->Bgain.Range.min : hn->Bgain.New;
     }
 
-    scImgParams_t* pScParams = &(Aew_ext_parameter.scImgParams[ Aew_ext_parameter.scCurrentCamMode ]); //scam
+    //scImgParams_t* pScParams = &(Aew_ext_parameter.scImgParams[ Aew_ext_parameter.scCurrentCamMode ]); //scam
 
-	if( (pScParams->fdMode == SCFdDisabled) && (pScParams->expMode != SCExpManual || pScParams->shutter == 0)) {
+    //if( (pScParams->fdMode == SCFdDisabled) && (pScParams->expMode != SCExpManual || pScParams->shutter == 0)) {
 		
-        if(hn->Y.New) tmp = ((size_t)hn->Y.New > (size_t)hn->YAE) ? hn->Y.New*100/hn->YAE : hn->YAE*100/hn->Y.New;
+        if(hn->Y.New) tmp = (hn->Y.New > hn->YAE) ? hn->Y.New*100/hn->YAE : hn->YAE*100/hn->Y.New;
         if(tmp > 200){
             if(hn->Y.New) hn->Exp.New = hn->Exp.Old*(hn->Y.New*2 + hn->YAE)/(hn->Y.New*3);
         } else if(tmp > 120){
-            if((size_t)hn->Y.New > (size_t)hn->YAE) hn->Exp.New = hn->Exp.Old*99/100;
+            if(hn->Y.New > hn->YAE) hn->Exp.New = hn->Exp.Old*99/100;
             else hn->Exp.New = hn->Exp.Old*100/99;
         }
 
-		if(hn->Exp.New > hn->Exp.Range.max)  hn->Exp.New = hn->Exp.Range.max;
-		if(hn->Exp.New < hn->Exp.Range.min)  hn->Exp.New = hn->Exp.Range.min;
-	}
+        //if(hn->Exp.New > hn->Exp.Range.max)  hn->Exp.New = hn->Exp.Range.max;
+        //if(hn->Exp.New < hn->Exp.Range.min)  hn->Exp.New = hn->Exp.Range.min;
+    //}
 
     //Change the offset and gain
     //hn->Offset.New = hn->Hmin.NewA - 50;
@@ -316,7 +311,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
 
     if(hn->Y.NewA - hn->Offset.New) { //scam
         hn->GIFIF.New = (hn->YAE*512)/(hn->Y.NewA - hn->Offset.New);
-
+        /*
 		if(pScParams->expMode == SCExpManual)
 		{
 			int valMin = (pScParams->gainScope.min * 11808)/100 + 512;
@@ -327,6 +322,7 @@ XDAS_Int32 IAEWBF_SIG_process(IAEWBF_Handle handle, IAEWBF_InArgs *inArgs, IAEWB
 				if(hn->GIFIF.New > valMax) hn->GIFIF.New = valMax; // 12320 MAX (8192 + 7 bit rgb gain)
 			}
 		}
+        */
 	}
     //up = hn->Hmax.NewA*hn->GIFIF.New>>9;
     //if((up < hn->HmaxTh) && (hn->Y.NewA - hn->Offset.New))

@@ -1,0 +1,24 @@
+scp -P 6  ~/aewbf_sig/src/aewbf_sig.c vadim@sigrand.ru:~/sigticam_priv/sigticam/platform/ti_dm368/appro2/av_capture/framework/alg/src/aewbf_sig/
+scp -P 6  ~/aewbf_sig/src/aewbf_control.c vadim@sigrand.ru:~/sigticam_priv/sigticam/platform/ti_dm368/appro2/av_capture/framework/alg/src/aewbf_sig/
+scp -P 6  ~/aewbf_sig/src/gamma.c vadim@sigrand.ru:~/sigticam_priv/sigticam/platform/ti_dm368/appro2/av_capture/framework/alg/src/aewbf_sig/
+scp -P 6  ~/aewbf_sig/include/aewbf_sig.h  vadim@sigrand.ru:~/sigticam_priv/sigticam/platform/ti_dm368/appro2/av_capture/framework/alg/src/aewbf_sig/include/
+scp -P 6  ~/aewbf_sig/include/iaewbf_sig.h vadim@sigrand.ru:~/sigticam_priv/sigticam/platform/ti_dm368/appro2/av_capture/framework/alg/src/aewbf_sig/include/
+scp -P 6  ~/aewbf_sig/include/aewb/alg_aewb.h  vadim@sigrand.ru:~/sigticam_priv/sigticam/platform/ti_dm368/appro2/av_capture/framework/alg/inc/
+#scp -P 6  ~/aewbf_sig/include/alg_motionDetect.h vadim@sigrand.ru:~/sigticam_priv/sigticam/platform/ti_dm368/appro2/av_capture/framework/alg/inc/
+#scp -P 6  ~/aewbf_sig/src/alg_motionDetect.c vadim@sigrand.ru:~/sigticam_priv/sigticam/platform/ti_dm368/appro2/av_capture/framework/alg/src/
+scp -P 6  ~/aewbf_sig/src/alg_aewb.c vadim@sigrand.ru:~/sigticam_priv/sigticam/platform/ti_dm368/appro2/av_capture/framework/alg/src/
+scp -P 6  ~/aewbf_sig/src/alg_aewb_control.c  vadim@sigrand.ru:~/sigticam_priv/sigticam/platform/ti_dm368/appro2/av_capture/framework/alg/src/
+scp -P 6  ~/aewbf_sig/include/sc_types.h  vadim@sigrand.ru:~/sigticam_priv/sigticam/pkg/sc-common/sc_common/
+scp -P 6  ~/aewbf_sig/include/aewb/aewb_xdm.h  vadim@sigrand.ru:~/sigticam_priv/sigticam/platform/ti_dm368/appro2/av_capture/framework/alg/priv/aewb/
+
+#scp   ~/aewbf_sig/src/aewbf_sig.c vadim@192.168.2.6:~/sigticam_priv/sigticam/platform/ti_dm368/appro2/av_capture/framework/alg/src/aewbf_sig/
+#scp   ~/aewbf_sig/src/aewbf_control.c vadim@192.168.2.6:~/sigticam_priv/sigticam/platform/ti_dm368/appro2/av_capture/framework/alg/src/aewbf_sig/
+#scp   ~/aewbf_sig/src/gamma.c vadim@192.168.2.6:~/sigticam_priv/sigticam/platform/ti_dm368/appro2/av_capture/framework/alg/src/aewbf_sig/
+#scp   ~/aewbf_sig/include/aewbf_sig.h  vadim@192.168.2.6:~/sigticam_priv/sigticam/platform/ti_dm368/appro2/av_capture/framework/alg/src/aewbf_sig/include/
+#scp   ~/aewbf_sig/include/iaewbf_sig.h vadim@192.168.2.6:~/sigticam_priv/sigticam/platform/ti_dm368/appro2/av_capture/framework/alg/src/aewbf_sig/include/
+#scp   ~/aewbf_sig/include/aewb/alg_aewb.h  vadim@192.168.2.6:~/sigticam_priv/sigticam/platform/ti_dm368/appro2/av_capture/framework/alg/inc/
+#scp   ~/aewbf_sig/include/alg_motionDetect.h vadim@192.168.2.6:~/sigticam_priv/sigticam/platform/ti_dm368/appro2/av_capture/framework/alg/inc/
+#scp   ~/aewbf_sig/src/alg_motionDetect.c vadim@192.168.2.6:~/sigticam_priv/sigticam/platform/ti_dm368/appro2/av_capture/framework/alg/src/
+#scp   ~/aewbf_sig/src/alg_aewb.c vadim@192.168.2.6:~/sigticam_priv/sigticam/platform/ti_dm368/appro2/av_capture/framework/alg/src/
+#scp   ~/aewbf_sig/src/alg_aewb_control.c  vadim@192.168.2.6:~/sigticam_priv/sigticam/platform/ti_dm368/appro2/av_capture/framework/alg/src/
+#scp   ~/aewbf_sig/include/sc_types.h  vadim@192.168.2.6:~/sigticam_priv/sigticam/pkg/sc-common/sc_common/
